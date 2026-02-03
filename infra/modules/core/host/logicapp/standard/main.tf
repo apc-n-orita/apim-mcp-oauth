@@ -50,14 +50,14 @@ resource "azapi_resource" "logicapp" {
       siteConfig = {
         appSettings = concat(
           [
-            # AzureWebJobsStorage - Blob/Queue/Table 用のマネージドID認証
+            # AzureWebJobsStorage - Managed Identity authentication for Blob/Queue/Table
             { name = "AzureWebJobsStorage__blobServiceUri", value = "https://${var.storage_account_name}.blob.core.windows.net/" },
             { name = "AzureWebJobsStorage__queueServiceUri", value = "https://${var.storage_account_name}.queue.core.windows.net/" },
             { name = "AzureWebJobsStorage__tableServiceUri", value = "https://${var.storage_account_name}.table.core.windows.net/" },
             { name = "AzureWebJobsStorage__credential", value = "managedidentity" },
             { name = "AzureWebJobsStorage__managedIdentityResourceId", value = var.user_assigned_identity_id },
 
-            # Azure Files - ストレージ接続 (マネージドID非対応のため接続文字列が必須)
+            # Azure Files - Storage connection (connection string required as Managed Identity is not supported)
             { name = "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING", value = "DefaultEndpointsProtocol=https;AccountName=${var.storage_account_name};AccountKey=${var.storage_account_access_key};EndpointSuffix=core.windows.net" },
             { name = "WEBSITE_CONTENTSHARE", value = azurerm_storage_share.logicapp_share.name },
 
@@ -65,14 +65,14 @@ resource "azapi_resource" "logicapp" {
             { name = "APPLICATIONINSIGHTS_CONNECTION_STRING", value = var.application_insights_connection_string },
             { name = "APPLICATIONINSIGHTS_AUTHENTICATION_STRING", value = "ClientId=${var.user_assigned_identity_client_id};Authorization=AAD" },
 
-            # Logic App 種別
+            # Logic App type
             { name = "APP_KIND", value = "workflowApp" },
 
-            # Extension Bundle 設定
+            # Extension Bundle settings
             { name = "AzureFunctionsJobHost__extensionBundle__id", value = "Microsoft.Azure.Functions.ExtensionBundle.Workflows" },
             { name = "AzureFunctionsJobHost__extensionBundle__version", value = var.extension_bundle_version },
 
-            # MCP Server Endpoints 設定
+            # MCP Server Endpoints settings
             { name = "AzureFunctionsJobHost__extensions__workflow__McpServerEndpoints__enable", value = "true" },
 
 
@@ -84,7 +84,7 @@ resource "azapi_resource" "logicapp" {
             { name = "WEBSITE_NODE_DEFAULT_VERSION", value = var.node_version },
             { name = "WEBSITE_AUTH_AAD_ALLOWED_TENANTS", value = var.tenant_id },
 
-            # OpenTelemetry 設定
+            # OpenTelemetry settings
             { name = "OTEL_SERVICE_NAME", value = "logic-app-mcp" },
             { name = "AzureFunctionsJobHost__telemetryMode", value = "OpenTelemetry" },
             { name = "AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__isEnabled", value = "false" },
@@ -99,25 +99,25 @@ resource "azapi_resource" "logicapp" {
 
 
 resource "azurerm_role_assignment" "uai_storage_blob_data_owner" {
-  scope                = var.storage_account_id # ストレージアカウントのスコープに変更
+  scope                = var.storage_account_id # Changed to storage account scope
   role_definition_name = "Storage Blob Data Owner"
   principal_id         = var.user_assigned_identity_principal_id
 }
 
 resource "azurerm_role_assignment" "uai_storage_account_contributor" {
-  scope                = var.storage_account_id # ストレージアカウントのスコープに変更
+  scope                = var.storage_account_id # Changed to storage account scope
   role_definition_name = "Storage Account Contributor"
   principal_id         = var.user_assigned_identity_principal_id
 }
 
 resource "azurerm_role_assignment" "uai_storage_table_data_contributor" {
-  scope                = var.storage_account_id # ストレージアカウントのスコープに変更
+  scope                = var.storage_account_id # Changed to storage account scope
   role_definition_name = "Storage Table Data Contributor"
   principal_id         = var.user_assigned_identity_principal_id
 }
 
 resource "azurerm_role_assignment" "uai_storage_queue_data_contributor" {
-  scope                = var.storage_account_id # ストレージアカウントのスコープに変更
+  scope                = var.storage_account_id # Changed to storage account scope
   role_definition_name = "Storage Queue Data Contributor"
   principal_id         = var.user_assigned_identity_principal_id
 }

@@ -1,90 +1,90 @@
 variable "name" {
-  description = "Logic App Standard の名前"
+  description = "The name of the Logic App Standard"
   type        = string
 }
 
 variable "location" {
-  description = "Azure リージョン"
+  description = "The Azure region"
   type        = string
 }
 
 variable "rg_name" {
-  description = "リソースグループ名"
+  description = "The resource group name"
   type        = string
 }
 
 variable "rg_id" {
-  description = "リソースグループのリソースID"
+  description = "The resource ID of the resource group"
   type        = string
 }
 
 variable "tags" {
-  description = "リソースに付与するタグ"
+  description = "Tags to apply to resources"
   type        = map(string)
   default     = {}
 }
 
 variable "sku_name" {
-  description = "App Service PlanのSKU名"
+  description = "The SKU name of the App Service Plan"
   type        = string
 }
 
 variable "storage_account_id" {
-  description = "ストレージアカウントの Resource ID"
+  description = "The resource ID of the storage account"
   type        = string
 }
 
 variable "storage_account_name" {
-  description = "ストレージアカウント名"
+  description = "The storage account name"
   type        = string
 }
 
 variable "storage_account_access_key" {
-  description = "ストレージアカウントのアクセスキー (Azure Files 用)"
+  description = "The storage account access key (for Azure Files)"
   type        = string
   sensitive   = true
 }
 
 variable "user_assigned_identity_id" {
-  description = "User-Assigned Managed Identity のリソースID"
+  description = "The resource ID of the User-Assigned Managed Identity"
   type        = string
 }
 
 variable "user_assigned_identity_client_id" {
-  description = "User-Assigned Managed Identity の Client ID"
+  description = "The Client ID of the User-Assigned Managed Identity"
   type        = string
 }
 
 variable "user_assigned_identity_principal_id" {
-  description = "User-Assigned Managed Identity の Principal ID"
+  description = "The Principal ID of the User-Assigned Managed Identity"
   type        = string
 }
 
 variable "application_insights_connection_string" {
-  description = "Application Insights 接続文字列"
+  description = "The Application Insights connection string"
   type        = string
 }
 
 variable "functions_extension_version" {
-  description = "Azure Functions 拡張バージョン"
+  description = "The Azure Functions extension version"
   type        = string
   default     = "~4"
 }
 
 variable "powershell_version" {
-  description = "PowerShell ランタイムバージョン"
+  description = "The PowerShell runtime version"
   type        = string
   default     = "7.4"
 }
 
 variable "node_version" {
-  description = "Node.js ランタイムバージョン"
+  description = "The Node.js runtime version"
   type        = string
   default     = "~18"
 }
 
 variable "extension_bundle_version" {
-  description = "Logic Apps Extension Bundle のバージョン範囲"
+  description = "The Logic Apps Extension Bundle version range"
   type        = string
   default     = "[1.*, 2.0.0)"
 }
@@ -95,11 +95,11 @@ variable "tenant_id" {
 }
 
 variable "azuread_application_entra_app_client_id" {
-  description = "Entra IDアプリのClient ID (authsettings用)"
+  description = "The Client ID of the Entra ID app (for authsettings)"
   type        = string
 }
 
 variable "apim_principal_id" {
-  description = "APIMのManaged IdentityのPrincipal ID (authsettings用)"
+  description = "The Principal ID of the APIM Managed Identity (for authsettings)"
   type        = string
 }
