@@ -1,0 +1,24 @@
+<!--
+	- Policies are applied in the order they appear.
+	- Place <base/> inside a section to inherit policies from the outer scope.
+	- Comments inside policies are not preserved.
+-->
+<!-- Add policies as children of <inbound>, <outbound>, <backend>, and <on-error> -->
+<policies>
+	<!-- Throttle, authorize, validate, cache, or transform incoming requests -->
+	<inbound>
+		<base />
+	</inbound>
+	<!-- Control how requests are forwarded to backend services -->
+	<backend>
+		<base />
+	</backend>
+	<!-- Customize outbound responses -->
+	<outbound>
+		<base />
+	</outbound>
+	<!-- Handle exceptions and customize error responses -->
+	<on-error>
+		<base />
+	</on-error>
+</policies>

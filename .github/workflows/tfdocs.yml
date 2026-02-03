@@ -1,0 +1,27 @@
+name: tfdocs
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+      pr-ref:
+        required: true
+        type: string
+
+jobs:
+  tfdocs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.pr-ref }}
+
+      - name: Render terraform docs inside the README.md and push changes back to PR branch
+        id: tfdocs
+        uses: terraform-docs/gh-actions@v1.4.1
+        with:
+          find-dir: ${{ inputs.working-directory }}
+          config-file: ${{ inputs.working-directory }}/.terraform-docs/terraform-docs.yml
+          git-push: "true"

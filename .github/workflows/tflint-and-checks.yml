@@ -1,0 +1,75 @@
+name: TFLint and Checks
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        required: true
+        type: string
+      tflint-version:
+        required: true
+        type: string
+      enable-terraform-format-check:
+        required: true
+        type: boolean
+      enable-terraform-lint-check:
+        required: true
+        type: boolean
+      enable-gha-lint-check:
+        required: true
+        type: boolean
+
+jobs:
+  tflint-and-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform format check
+        if: ${{ inputs.enable-terraform-format-check }}
+        id: fmt
+        continue-on-error: true
+        run: terraform fmt -check -recursive "${{ inputs.working-directory }}"
+
+      - name: Set up tflint
+        if: ${{ inputs.enable-terraform-lint-check }}
+        id: setup-tflint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ inputs.tflint-version }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tflint init
+        if: ${{ inputs.enable-terraform-lint-check }}
+        id: tflint-init
+        continue-on-error: true
+        run: |
+          tflint --init -c "${{ inputs.working-directory }}/.tflint.hcl"
+
+      - name: Run tflint
+        if: ${{ inputs.enable-terraform-lint-check }}
+        id: tflint-run
+        continue-on-error: true
+        run: |
+          tflint --recursive -c "${{ inputs.working-directory }}/.tflint.hcl" -f compact
+
+      - name: Run actionlint
+        if: ${{ inputs.enable-gha-lint-check }}
+        id: actionlint
+        continue-on-error: true
+        uses: raven-actions/actionlint@v1
+
+      - name: Fail if any check failed.
+        # Fail if any of the following checks failed:
+        # - Terraform lint init
+        # - Terraform lint run
+        # - Terraform format check
+        # - GitHub Actions lint check
+        if: ${{ (inputs.enable-terraform-lint-check && steps.tflint-init.outcome == 'failure') || (inputs.enable-terraform-lint-check && steps.tflint-run.outcome == 'failure') || (inputs.enable-terraform-format-check && steps.fmt.outcome == 'failure') || (inputs.enable-gha-lint-check && steps.actionlint.outcome == 'failure') }}
+        run: |
+          echo "One or more checks failed." 1>&2
+          exit 1

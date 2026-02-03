@@ -1,0 +1,16 @@
+{
+  "mcpServers": [
+    {
+      "name": "projects",
+      "description": "projects",
+      "tools": [
+        {
+          "name": "hello_project1"
+        },
+        {
+          "name": "hello_project2"
+        }
+      ]
+    }
+  ]
+}
