@@ -39,6 +39,6 @@
 
 | Name | Description |
 |------|-------------|
-| <a name="output_product_id"></a> [product\_id](#output\_product\_id) | 作成されたAPIMプロダクトのID |
-| <a name="output_product_name"></a> [product\_name](#output\_product\_name) | APIMプロダクト名 |
+| <a name="output_product_id"></a> [product\_id](#output\_product\_id) | The ID of the created APIM product |
+| <a name="output_product_name"></a> [product\_name](#output\_product\_name) | The APIM product name |
 <!-- END_TF_DOCS -->
