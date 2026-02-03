@@ -1,0 +1,29 @@
+{
+  "version": "2.0",
+  "telemetryMode": "OpenTelemetry",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": false
+      }
+    }
+  },
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.0.0, 5.0.0)"
+  },
+  "extensions": {
+    "mcp": {
+      "instructions": "このMCPサーバーはユーザーからのメッセージをそのまま返します。",
+      "serverName": "hello-mcp-server",
+      "serverVersion": "1.0.0",
+      "encryptClientState": true,
+      "messageOptions": {
+        "useAbsoluteUriForEndpoint": false
+      },
+      "system": {
+        "webhookAuthorizationLevel": "Anonymous"
+      }
+    }
+  }
+}

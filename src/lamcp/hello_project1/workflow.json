@@ -1,0 +1,42 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0",
+    "actions": {
+      "Response": {
+        "type": "Response",
+        "inputs": {
+          "statusCode": 200,
+          "body": "@triggerBody()?['message']"
+        },
+        "runAfter": {}
+      }
+    },
+    "triggers": {
+      "Request": {
+        "type": "Request",
+        "description": "This example shows a simple “Hello World” operation for project1.\nThe application returns the user’s message exactly as received, acting as a basic echo to verify that the project is running correctly.",
+        "kind": "Http",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "message"
+            ],
+            "properties": {
+              "message": {
+                "format": "message",
+                "description": "A text message provided by the user. This field must contain between 1 and 1000 characters.",
+                "type": "string",
+                "title": "message",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "kind": "Stateful"
+}
