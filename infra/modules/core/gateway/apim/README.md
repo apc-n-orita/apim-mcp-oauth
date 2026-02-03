@@ -4,14 +4,14 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
-| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.42.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.58.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~>2.0.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.42.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.58.0 |
 
 ## Resources
 
@@ -30,7 +30,7 @@
 |------|-------------|------|---------|:--------:|
 | <a name="input_application_insights_name"></a> [application\_insights\_name](#input\_application\_insights\_name) | Azure Application Insights Name. | `string` | n/a | yes |
 | <a name="input_location"></a> [location](#input\_location) | The supported Azure location where the resource deployed | `string` | n/a | yes |
-| <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | 共通で使用する Log Analytics Workspace のリソース ID | `string` | n/a | yes |
+| <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of the Log Analytics Workspace used commonly | `string` | n/a | yes |
 | <a name="input_name"></a> [name](#input\_name) | n/a | `string` | n/a | yes |
 | <a name="input_rg_name"></a> [rg\_name](#input\_rg\_name) | The name of the resource group to deploy resources into | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | A list of tags used for deployed services. | `map(string)` | n/a | yes |
@@ -45,7 +45,9 @@
 
 | Name | Description |
 |------|-------------|
+| <a name="output_APIM_ID"></a> [APIM\_ID](#output\_APIM\_ID) | n/a |
 | <a name="output_APIM_SERVICE_NAME"></a> [APIM\_SERVICE\_NAME](#output\_APIM\_SERVICE\_NAME) | n/a |
 | <a name="output_API_MANAGEMENT_LOGGER_ID"></a> [API\_MANAGEMENT\_LOGGER\_ID](#output\_API\_MANAGEMENT\_LOGGER\_ID) | n/a |
+| <a name="output_apim_principal_id"></a> [apim\_principal\_id](#output\_apim\_principal\_id) | n/a |
 | <a name="output_gateway_url"></a> [gateway\_url](#output\_gateway\_url) | n/a |
 <!-- END_TF_DOCS -->
