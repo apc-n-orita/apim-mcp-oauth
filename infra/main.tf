@@ -13,7 +13,7 @@ locals {
   logicapp_runtime = {
     functions_extension_version = "~4"
     powershell_version          = "7.4"
-    node_version                = "~20"
+    node_version                = "~22"
     extension_bundle_version    = "[1.*, 2.0.0)"
   }
 
@@ -29,13 +29,10 @@ locals {
         value = "funcmcp"
       },
       {
-        name  = "OTEL_TRACES_SAMPLER"
-        value = "always_on"
-      },
-      {
         name  = "WEBSITE_AUTH_AAD_ALLOWED_TENANTS"
         value = data.azuread_client_config.current.tenant_id
-        }, {
+      },
+      {
         name  = "WEBSITE_AUTH_PRM_DEFAULT_WITH_SCOPES"
         value = "api://${azuread_application.oauth_app.client_id}/user_impersonation"
       }

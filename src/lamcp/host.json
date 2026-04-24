@@ -8,14 +8,18 @@
   "logging": {
     "applicationInsights": {
       "samplingSettings": {
-        "isEnabled": false
+        "isEnabled": true,
+        "excludedTypes": "Exception"
       }
     }
   },
   "extensions": {
     "workflow": {
       "McpServerEndpoints": {
-        "enable": true
+        "enable": true,
+        "authentication": {
+          "type": "oauth2"
+        }
       },
       "Settings": {}
     }
