@@ -38,6 +38,7 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
-.azure
-.vscode/
+.azure/
+.vscode/*
+!.vscode/mcp.json
 settings.local.json

@@ -87,7 +87,7 @@ resource "azurecaf_name" "la_mcp_storage_name" {
 
 # Deploy resource group
 resource "azurerm_resource_group" "rg" {
-  name     = azurecaf_name.rg_name.result
+  name     = "${azurecaf_name.rg_name.result}-${substr(local.resource_token, 0, 3)}"
   location = var.location
   // Tag the resource group with the azd environment name
   // This should also be applied to all resources created in this module
@@ -95,7 +95,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 resource "azurerm_log_analytics_workspace" "law" {
-  name                = azurecaf_name.law_name.result
+  name                = "${azurecaf_name.law_name.result}-${substr(local.resource_token, 0, 3)}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   sku                 = "PerGB2018"
@@ -107,6 +107,8 @@ resource "azurerm_log_analytics_workspace" "law" {
 resource "random_uuid" "user_impersonation_scope_id" {}
 resource "random_uuid" "hello_project1" {}
 resource "random_uuid" "hello_project2" {}
+resource "random_uuid" "common" {}
+resource "random_uuid" "secret" {}
 
 resource "azuread_application" "oauth_app" {
   display_name = "mcp-oauth-app-${substr(local.resource_token, 0, 3)}"
@@ -138,6 +140,24 @@ resource "azuread_application" "oauth_app" {
     value                = "hello_project2"
   }
 
+  app_role {
+    allowed_member_types = ["User", "Application"]
+    description          = "Role for common"
+    display_name         = "common_*"
+    enabled              = true
+    id                   = random_uuid.common.result # Fixed UUID (change if necessary)
+    value                = "common_*"
+  }
+
+  app_role {
+    allowed_member_types = ["User", "Application"]
+    description          = "Role for secret"
+    display_name         = "secret_*"
+    enabled              = true
+    id                   = random_uuid.secret.result # Fixed UUID (change if necessary)
+    value                = "secret_*"
+  }
+
   lifecycle {
     ignore_changes = [
       identifier_uris,
@@ -159,6 +179,13 @@ resource "azuread_app_role_assignment" "hello_project1_user" {
   resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
 }
 
+
+# Assign common role to user
+resource "azuread_app_role_assignment" "common_user" {
+  principal_object_id = data.azuread_client_config.current.object_id
+  app_role_id         = azuread_service_principal.oauth_app_sp.app_role_ids["common_*"]
+  resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
+}
 
 # Set Application ID URI
 resource "azuread_application_identifier_uri" "entra_app_uri" {

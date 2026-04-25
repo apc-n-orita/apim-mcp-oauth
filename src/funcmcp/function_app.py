@@ -62,6 +62,57 @@ def hello_project2(context) -> str:
     args = content.get("arguments", {}) if isinstance(content, dict) else {}
     user_message = args.get("message")
     if not user_message:
-        return "No 'message' provided."    
+        return "No 'message' provided."
+
+    return user_message
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="common_helloproject",
+    description="This example shows a simple “Hello World” operation for common project.The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly.",
+    toolProperties=tool_properties_agent_chat_json,
+)
+def common_helloproject(context) -> str:
+    """
+    This example shows a simple “Hello World” operation for common project.
+    The application returns the user’s message exactly as received, acting as a basic echo to verify that the project is running correctly.
+    """
+
+    try:
+        content = json.loads(context) if context else {}
+    except json.JSONDecodeError:
+        return "Invalid context payload (must be JSON)."
+
+    args = content.get("arguments", {}) if isinstance(content, dict) else {}
+    user_message = args.get("message")
+    if not user_message:
+        return "No 'message' provided."
+
+    return user_message
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="secret_helloproject",
+    description="This example shows a simple “Hello World” operation for secret project.The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly.",
+    toolProperties=tool_properties_agent_chat_json,
+)
+def secret_helloproject(context) -> str:
+    """
+    This example shows a simple “Hello World” operation for secret project.
+    The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly.
+    """
+    try:
+        content = json.loads(context) if context else {}
+    except json.JSONDecodeError:
+        return "Invalid context payload (must be JSON)." 
+
+    args = content.get("arguments", {}) if isinstance(content, dict) else {}
+    user_message = args.get("message")
+    if not user_message:
+        return "No 'message' provided."
 
     return user_message
