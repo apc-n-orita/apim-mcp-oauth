@@ -12,7 +12,7 @@ This hands-on lab demonstrates the end-to-end flow for securely executing MCP in
 ### AI Agent / Claude Code → APIM → MCP
 
 The overall flow when executing MCP from an AI Agent (e.g., MS Foundry Agent) or Claude Code.  
-Both clients acquire an access token in advance (via managed identity or `az login`) and attach it to requests — the APIM flow is identical.
+Both clients acquire an access token in advance (via managed identity, service principal or `az login`) and attach it to requests — the APIM flow is identical.
 
 ```mermaid
 sequenceDiagram
