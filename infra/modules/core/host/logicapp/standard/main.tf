@@ -72,10 +72,6 @@ resource "azapi_resource" "logicapp" {
             { name = "AzureFunctionsJobHost__extensionBundle__id", value = "Microsoft.Azure.Functions.ExtensionBundle.Workflows" },
             { name = "AzureFunctionsJobHost__extensionBundle__version", value = var.extension_bundle_version },
 
-            # MCP Server Endpoints settings
-            { name = "AzureFunctionsJobHost__extensions__workflow__McpServerEndpoints__enable", value = "true" },
-
-
             # Functions Runtime
             { name = "FUNCTIONS_EXTENSION_VERSION", value = var.functions_extension_version },
             { name = "FUNCTIONS_INPROC_NET8_ENABLED", value = "1" },
@@ -86,8 +82,6 @@ resource "azapi_resource" "logicapp" {
 
             # OpenTelemetry settings
             { name = "OTEL_SERVICE_NAME", value = "logic-app-mcp" },
-            { name = "AzureFunctionsJobHost__telemetryMode", value = "OpenTelemetry" },
-            { name = "AzureFunctionsJobHost__logging__applicationInsights__samplingSettings__isEnabled", value = "false" },
           ],
         )
       }

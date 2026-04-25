@@ -6,16 +6,17 @@ This repository provides a hands-on learning experience for implementing end-to-
 
 This hands-on lab demonstrates the end-to-end flow for securely executing MCP in two patterns:
 
-- **AI Agent → APIM → MCP**
-- **VS Code (GitHub Copilot) → APIM → MCP**
+- **AI Agent / Claude Code → APIM → MCP**
+- **VS Code (GitHub Copilot Chat / CLI) → APIM → MCP**
 
-### AI Agent → APIM → MCP
+### AI Agent / Claude Code → APIM → MCP
 
-The overall flow when executing MCP from an AI Agent.
+The overall flow when executing MCP from an AI Agent (e.g., MS Foundry Agent) or Claude Code.  
+Both clients acquire an access token in advance (via managed identity, service principal or `az login`) and attach it to requests — the APIM flow is identical.
 
 ```mermaid
 sequenceDiagram
-    participant Agent as AI Agent (e.g., AI Foundry Agent)
+    participant Agent as AI Agent / Claude Code
     participant Entra as Entra ID
     participant APIM as API Management
     participant MCP as MCP Backend (Logic Apps / Azure Functions)
@@ -42,13 +43,14 @@ sequenceDiagram
     end
 ```
 
-### VS Code (GitHub Copilot) → APIM → MCP
+### VS Code (GitHub Copilot Chat / CLI) → APIM → MCP
 
-The overall flow when executing MCP from VS Code (GitHub Copilot).
+The overall flow when executing MCP from VS Code (GitHub Copilot Chat or CLI).  
+Both Chat and CLI in VS Code share the same OAuth authorization flow — they discover the OAuth endpoint from APIM and authenticate interactively.
 
 ```mermaid
 sequenceDiagram
-    participant VS as VS Code (GitHub Copilot)
+    participant VS as VS Code (GitHub Copilot Chat / CLI)
     participant APIM as API Management
     participant ID as Entra ID
     participant MCP as MCP Backend (Logic Apps / Azure Functions)
@@ -131,13 +133,14 @@ azd down
 
 ## Hands-On
 
-### AI Agent → APIM → MCP
+### AI Agent / Claude Code → APIM → MCP
 
-Reproduce the sequence of operations where an AI Agent (e.g., Azure AI Foundry Agent) invokes MCP using Python scripts.
+Reproduce the sequence of operations where an AI Agent (e.g., MS Foundry Agent) or Claude Code invokes MCP.  
+Both clients authenticate by acquiring an Azure access token upfront — AI Agent uses Python scripts, Claude Code uses `.mcp.json` with `headersHelper`.
 
 ```mermaid
 sequenceDiagram
-    participant Agent as AI Agent (e.g., AI Foundry Agent)
+    participant Agent as AI Agent / Claude Code
     participant Entra as Entra ID
     participant APIM as API Management
     participant MCP as MCP Backend (Logic Apps / Azure Functions)
@@ -179,27 +182,20 @@ pip install azure.identity
 
 **2. Configure Environment Variables**
 
-Set the required values from the `azd up` output.
+Set the required values dynamically from the azd environment.
 
 ```bash
-export OAUTH_APP_ID="<OAUTH-APP-ID from azd up output>"
-export MCP_URL="<LOGICAPP_MCP_ENDPOINTS from azd up output>"
+export OAUTH_APP_ID="$(azd env get-value OAUTH_APP_ID)"
+export MCP_URL="$(azd env get-value LOGICAPP_MCP_ENDPOINTS)"
 ```
 
 **3. Verify Access Token**
 
-Run `check.entraid_token.py` to verify the access token claims.
+Run `check.entraid_token.py` and verify that `hello_project1` is included in the `roles` claim.
 
 ```bash
-python check.entraid_token.py
-```
-
-Confirm that `roles` are included as shown below (if roles are missing, run `az logout` and `az login` again).
-
-```json
-"roles": [
-    "hello_project1"
-]
+python check.entraid_token.py | grep -v '^===' \
+  | jq 'if .roles then (if (.roles | any(. == "hello_project1")) then "✅ OK: hello_project1 is included in roles" else "❌ NG: hello_project1 not found in roles — run az logout && az login" end) else "⚠️ roles claim is missing — run az logout && az login" end'
 ```
 
 **4. Retrieve MCP Tool List**
@@ -228,13 +224,74 @@ export MCP_TOOL_NAME="hello_project2"
 python mcp_tool_call.py
 ```
 
-### VS Code (GitHub Copilot) → APIM → MCP
+#### Claude Code
 
-Verify the sequence of operations where VS Code (GitHub Copilot) invokes MCP.
+Claude Code connects to APIM-protected MCP servers using the same token-based flow.  
+The `headersHelper` field in `.mcp.json` calls `az account get-access-token` at startup, so no interactive browser login is required.
+
+> **Tips**
+>
+> **Why Azure CLI token instead of OAuth client credentials?**  
+> Claude Code natively supports OAuth authorization via Dynamic Client Registration (DCR). However, Entra ID does not support DCR. Static client registration is an alternative, but it requires distributing a client secret to each user, which poses a security risk. As a practical workaround, Claude Code can be configured to acquire a token via the Azure CLI (`az login`) using `headersHelper` instead.
+>
+> **Access token expiry and reconnection**  
+> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token.
+>
+> **Why pre-authorizing Azure CLI is safe**  
+> The `headersHelper` command acquires a token scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`) using the Azure CLI client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). This is the same pattern Microsoft uses for its own first-party services (e.g., `https://ai.azure.com`) — they are pre-authorized against Entra ID and obtain tokens via Azure CLI in the same way. Additionally, the OAuth app registered here is single-tenant, so only users who can sign in to this specific tenant can obtain a token. The Terraform resource that enables this is:
+>
+> ```hcl
+> resource "azuread_application_pre_authorized" "oauth_app" {
+>   application_id       = azuread_application.oauth_app.id
+>   authorized_client_id = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" # Azure CLI
+>
+>   permission_ids = [
+>     azuread_application_permission_scope.user_impersonation.scope_id,
+>   ]
+> }
+> ```
+
+**1. Configure `.mcp.json`**
+
+Generate `.mcp.json` dynamically using `azd env get-value`.
+
+```bash
+cd $(git rev-parse --show-toplevel)
+FUNC_URL="$(azd env get-value FUNC_MCP_ENDPOINTS)"
+LA_URL="$(azd env get-value LOGICAPP_MCP_ENDPOINTS)"
+OAUTH_APP_ID="$(azd env get-value OAUTH_APP_ID)"
+HELPER="TOKEN=\$(az account get-access-token --scope 'api://${OAUTH_APP_ID}/.default' --query accessToken -o tsv) && echo \"{\\\"Authorization\\\": \\\"Bearer \$TOKEN\\\"}\""
+jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" --arg helper "$HELPER" \
+  '{mcpServers: {
+    "func-hello-mcp":  {type: "http", url: $func_url, headersHelper: $helper},
+    "logic-hello-mcp": {type: "http", url: $la_url,   headersHelper: $helper}
+  }}' \
+  > .mcp.json
+```
+
+**3. Execute MCP Tool (Success Case)**
+
+Prompt the following in Claude Code and confirm that the MCP tool executes successfully.
+
+```
+Use func-hello-mcp to say hello to project1
+```
+
+**4. Execute MCP Tool (Rejection Case)**
+
+Prompt the following and confirm that execution is rejected due to lack of permissions.
+
+```
+Use func-hello-mcp to say hello to project2
+```
+
+### VS Code (GitHub Copilot Chat / CLI) → APIM → MCP
+
+Verify the sequence of operations where VS Code (GitHub Copilot Chat or CLI) invokes MCP.
 
 ```mermaid
 sequenceDiagram
-    participant VS as VS Code (GitHub Copilot)
+    participant VS as VS Code (GitHub Copilot Chat / CLI)
     participant APIM as API Management
     participant ID as Entra ID
     participant MCP as MCP Backend (Logic Apps / Azure Functions)
@@ -270,18 +327,18 @@ sequenceDiagram
 
 **1. Edit MCP Configuration File**
 
-Edit VS Code's `mcp.json` to configure the MCP server. Set the URL obtained from the `azd up` output.
+Update `.vscode/mcp.json` with the URL from the azd environment.
 
-```json
-{
-  "servers": {
-    "func-hello-mcp": {
-      "url": "<FUNC_MCP_ENDPOINTS from azd up output>",
-      "type": "http"
-    }
-  },
-  "inputs": []
-}
+```bash
+cd $(git rev-parse --show-toplevel)
+FUNC_URL="$(azd env get-value FUNC_MCP_ENDPOINTS)"
+LA_URL="$(azd env get-value LOGICAPP_MCP_ENDPOINTS)"
+jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" \
+  '{servers: {
+    "func-hello-mcp":  {type: "http", url: $func_url},
+    "logic-hello-mcp": {type: "http", url: $la_url}
+  }}' \
+  > .vscode/mcp.json
 ```
 
 **2. Verify MCP Tool List Retrieval**
@@ -290,18 +347,30 @@ After saving the configuration file, start MCP. When prompted for Entra ID authe
 
 **3. Execute MCP Tool (Success Case)**
 
-Prompt the following in GitHub Copilot Chat (agent mode) and confirm that the MCP tool executes successfully.
+**GitHub Copilot Chat (agent mode):** Prompt the following and confirm that the MCP tool executes successfully.
 
 ```
 Use func-hello-mcp to say hello to project1
 ```
 
+**GitHub Copilot CLI:** Run the following in the terminal and confirm the tool executes successfully.
+
+```bash
+copilot -p "Use func-hello-mcp to say hello to project1" --allow-all-tools
+```
+
 **4. Execute MCP Tool (Rejection Case)**
 
-Prompt the following in GitHub Copilot Chat (agent mode) and confirm that execution is rejected due to lack of permissions.
+**GitHub Copilot Chat (agent mode):** Prompt the following and confirm that execution is rejected due to lack of permissions.
 
 ```
 Use func-hello-mcp to say hello to project2
+```
+
+**GitHub Copilot CLI:** Run the following and confirm the tool is rejected due to lack of permissions.
+
+```bash
+copilot -p "Use func-hello-mcp to say hello to project2" --allow-all-tools
 ```
 
 ## Technical Details and Use Cases

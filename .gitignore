@@ -1,3 +1,7 @@
+# copilot cli configuration files
+.copilot/*
+!.copilot/mcp-config.json
+
 # Local .terraform directories
 .terraform/
 # .tfstate files
@@ -34,5 +38,7 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
-.azure
-.vscode/
+.azure/
+.vscode/*
+!.vscode/mcp.json
+settings.local.json

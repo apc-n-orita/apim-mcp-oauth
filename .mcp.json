@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "logic-hello-mcp": {
+      "type": "http",
+      "url": "<logic-hello-mcp-url>",
+      "headersHelper": "TOKEN=$(az account get-access-token --scope 'api://<oauth-app-clientid>/.default' --query accessToken -o tsv) && echo \"{\\\"Authorization\\\": \\\"Bearer $TOKEN\\\"}\""
+    },
+    "func-hello-mcp": {
+      "type": "http",
+      "url": "<func-hello-mcp-url>",
+      "headersHelper": "TOKEN=$(az account get-access-token --scope 'api://<oauth-app-clientid>/.default' --query accessToken -o tsv) && echo \"{\\\"Authorization\\\": \\\"Bearer $TOKEN\\\"}\""
+    }
+  }
+}

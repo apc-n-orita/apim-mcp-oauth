@@ -59,9 +59,13 @@ The token validation policy uses `validate-azure-ad-token` to perform the follow
 - **Verify Issuer**: Confirms that the `iss` claim is the correct URL for the specified tenant.
 - **Validate Audience**: Verifies that the token was issued for the correct resource (`api://{{oauth-app-id}}/`).
 
-During MCP tool execution (`tools/call`), the policy checks whether the token's `roles` claim includes the tool name. If included, tool execution is permitted and the request is sent to the backend MCP; otherwise, a 403 error is returned.
+#### Flexible Permission Management Using Wildcards
 
-Additionally, `authentication-managed-identity` overwrites the token with APIM's Managed Identity token and sends it to the backend MCP (Logic Apps/Functions). By configuring Easy Auth to allow only APIM's Managed Identity, access other than through APIM is blocked.
+During MCP tool execution (`tools/call`), the policy checks whether the token's `roles` claim permits the requested tool—supporting both exact match and wildcard (`*`) prefix match. For example, a role `Mcp_Arithmetic_*` automatically authorizes `Mcp_Arithmetic_Add`, `Mcp_Arithmetic_Sub`, and other tools with the same prefix. If authorized, the request proceeds; otherwise, a 403 error is returned.
+
+#### Backend Protection with Managed Identity
+
+`authentication-managed-identity` overwrites the token with APIM's Managed Identity token and sends it to the backend MCP (Logic Apps/Functions). By configuring Easy Auth to allow only APIM's Managed Identity, access other than through APIM is blocked.
 
 ```xml
 <!--
@@ -90,29 +94,33 @@ Additionally, `authentication-managed-identity` overwrites the token with APIM's
         <choose>
             <!-- Authenticate only tool calls -->
             <when condition="@((context.Variables.GetValueOrDefault<string>("mcpMethod") ?? "").Equals("tools/call", StringComparison.OrdinalIgnoreCase))">
-                <!-- Extract tool name -->
                 <set-variable name="mcpToolName" value="@{
                     var body = context.Request.Body.As<JObject>(preserveContent: true);
-                    return (string)body["params"]?["name"];
+                    return (string)body["params"]?["name"] ?? "";
                 }" />
-                <!-- Extract roles -->
-                <set-variable name="roles_csv" value="@{
-                    var jwt = (Jwt)context.Variables["jwt"];
-                    var arr = (jwt != null && jwt.Claims != null && jwt.Claims.ContainsKey("roles"))
-                        ? jwt.Claims["roles"]
-                        : new string[0];
-                    return string.Join(",", arr);   // e.g. "hello_project1,hello_project2"
-                }" />
-                <!-- Compare tool name to roles -->
                 <set-variable name="isAuthorized" value="@{
-                    var wf = ((string)context.Variables.GetValueOrDefault("mcpToolName","")).ToLower();
-                    var roles = ((string)context.Variables.GetValueOrDefault("roles_csv","")).ToLower().Replace(" ", "");
-                    if (string.IsNullOrEmpty(wf) || string.IsNullOrEmpty(roles)) { return false; }
-                    var haystack = "," + roles + ",";
-                    var needle = "," + wf + ",";
-                    return haystack.Contains(needle);
+                    var jwt = (Jwt)context.Variables["jwt"];
+                    if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
+
+                    var userRoles = jwt.Claims["roles"]; // Assumed to be string[]
+                    var toolName = (string)context.Variables["mcpToolName"];
+
+                    // Wildcard matching logic
+                    foreach (var role in userRoles) {
+                        // Pattern A: Exact match (e.g., hello_project1)
+                        if (role.Equals(toolName, StringComparison.OrdinalIgnoreCase)) { return true; }
+
+                        // Pattern B: Wildcard match
+                        // Allows cases where role is "Mcp_Arithmetic_*" and tool name is "Mcp_Arithmetic_Add"
+                        // Check prefix match excluding the trailing '*' from the role name
+                        if (role.EndsWith("*")) {
+                            var prefix = role.Substring(0, role.Length - 1);
+                            // Case-insensitive check if tool name starts with the role's prefix
+                            if (toolName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { return true; }
+                        }
+                    }
+                    return false;
                 }" />
-                <!-- Block if not authorized -->
                 <choose>
                     <when condition="@((bool)context.Variables["isAuthorized"])">
                         <!-- Authorized, pass through -->
@@ -125,8 +133,6 @@ Additionally, `authentication-managed-identity` overwrites the token with APIM's
                     </otherwise>
                 </choose>
             </when>
-            <!-- Allow non-tool calls (connect, resources, etc.) -->
-            <otherwise />
         </choose>
         <!-- Acquire token using Managed Identity -->
         <authentication-managed-identity resource="{{oauth-app-id}}" output-token-variable-name="msi-access-token" ignore-error="false" />
@@ -152,65 +158,9 @@ Additionally, `authentication-managed-identity` overwrites the token with APIM's
 </policies>
 ```
 
-#### Flexible Permission Management Using Wildcards
-
-In production environments, there may be numerous MCP tools. Managing role-to-tool mappings one-to-one as in this hands-on lab can be cumbersome, so implementing prefix-based partial matching validation enables more flexible permission management.
-
-**Example:**
-
-- App Role value: `Mcp_Arithmetic_*`
-- MCP tool names: `Mcp_Arithmetic_Add`, `Mcp_Arithmetic_Sub`, etc.
-
-The following policy implements wildcard (`*`) matching logic:
-
-```xml
-<when condition="@((context.Variables.GetValueOrDefault<string>("mcpMethod") ?? "").Equals("tools/call", StringComparison.OrdinalIgnoreCase))">
-    <set-variable name="mcpToolName" value="@{
-        var body = context.Request.Body.As<JObject>(preserveContent: true);
-        return (string)body["params"]?["name"] ?? "";
-    }" />
-    <set-variable name="isAuthorized" value="@{
-        var jwt = (Jwt)context.Variables["jwt"];
-        if (jwt == null || !jwt.Claims.ContainsKey("roles")) return false;
-
-        var userRoles = jwt.Claims["roles"]; // Assumed to be string[]
-        var toolName = (string)context.Variables["mcpToolName"];
-
-        // Wildcard matching logic
-        foreach (var role in userRoles) {
-            // Pattern A: Exact match (e.g., Mcp.Admin)
-            if (role.Equals(toolName, StringComparison.OrdinalIgnoreCase)) return true;
-
-            // Pattern B: Wildcard match
-            // Allows cases where role is "Mcp_Arithmetic_*" and tool name is "Mcp_Arithmetic_Add"
-            // Check prefix match excluding the trailing '*' from the role name
-            if (role.EndsWith("*")) {
-                var prefix = role.Substring(0, role.Length - 1);
-                // Case-insensitive check if tool name starts with the role's prefix
-                if (toolName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
-            }
-        }
-        return false;
-    }" />
-    <choose>
-        <when condition="@((bool)context.Variables["isAuthorized"])">
-            <!-- Authorized, pass through -->
-        </when>
-        <otherwise>
-            <return-response>
-                <set-status code="403" reason="Forbidden" />
-                <set-body>@("{\"error\":\"Role missing or invalid\"}")</set-body>
-            </return-response>
-        </otherwise>
-    </choose>
-</when>
-```
-
-This wildcard approach enables managing multiple tools with a single role, improving operational efficiency and maintainability.
-
 ### OAuth App (Entra ID App Registration and Role Configuration)
 
-Register an MCP app in Entra ID (formerly Azure AD) and create app roles with the same names as the MCP tool names (e.g., `hello_project1`, `hello_project2`).
+Register an MCP app in Entra ID (formerly Azure AD) and create app roles with the same names as the MCP tool names (e.g., `hello_project1`, `hello_project2`, `common_*`, `secret_*`).
 
 - In this hands-on lab, these roles are assigned to the user who executed `azd up`.
 - The app role's "Allowed member types" specifies both "Users/Groups" and "Applications," allowing roles to be assigned not only to users and groups but also to Managed Identities (e.g., AI Foundry projects or agent IDs).
