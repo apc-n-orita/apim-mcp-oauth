@@ -171,7 +171,23 @@ Register an MCP app in Entra ID (formerly Azure AD) and create app roles with th
 
 Enables centralized authentication and authorization management for enterprise-specific custom MCPs.
 
-> For centralized authentication and authorization management of official MCPs like GitHub MCP, I personally believe that [ID-JUG (Identity Assertion Authorization Grant)](https://github.com/oauth-wg/oauth-identity-assertion-authz-grant/blob/main/draft-ietf-oauth-identity-assertion-authz-grant.md) proposed by the OAuth Working Group is promising.
+> **Note on Official MCPs (e.g., GitHub MCP, Azure MCP, Slack MCP)**
+>
+> For official MCPs, restricting access at the MCP tool level has limited effectiveness. In practice, AI agents — and the developers who operate them — frequently bypass MCP entirely by invoking the platform CLI directly (e.g., `gh` commands, raw REST/GraphQL API calls). Since the same underlying operation can be performed either through an MCP tool or a direct CLI call, controlling only the MCP path leaves a wide-open alternative route.
+>
+> More robust and comprehensive approaches are:
+>
+> #### 1. Platform-Side RBAC
+>
+> Restrict what the agent's credential can do at the platform level, regardless of how it was invoked (MCP, CLI, or direct API). Each platform — GitHub, Azure, Slack, and others — provides its own RBAC or other permission controls. Applying least-privilege settings there ensures the restriction holds no matter which execution path the agent takes.
+>
+> #### 2. Harness Engineering (Agent Skills)
+>
+> [Harness engineering](https://www.humanlayer.dev/blog/skill-issue-harness-engineering-for-coding-agents) treats the agent's runtime environment — system prompts, skill definitions, and hooks — as a behavioral governance layer that controls _how_ the agent acts, independent of which tools are available. Key controls:
+>
+> - **copilot-instructions.md /CLAUDE.md / AGENTS.md**: Standing instructions injected into every agent session. Explicitly define allowed operations, forbidden actions (e.g., "never delete branches in production repos"), and required escalation paths for high-risk operations.
+> - **Agent Skills (SKILL.md)**: Markdown files with YAML frontmatter that restrict auto-invocation (`disable-model-invocation: true`), scope allowed tools (`allowed-tools`), and activate on specific conditions. See the [Agent Skills open standard](https://agentskills.io).
+> - **Hooks**: Deterministic shell commands that approve or deny tool calls based on input patterns. Unlike prompt-based instructions (which are probabilistic), hooks provide hard enforcement at the tool-call boundary.
 
 ### MCP Tool Permission Isolation per AI Foundry Project
 
