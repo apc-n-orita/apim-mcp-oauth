@@ -34,6 +34,7 @@
 | <a name="input_apim_service_name"></a> [apim\_service\_name](#input\_apim\_service\_name) | The name of the API Management service | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | n/a | `any` | n/a | yes |
 | <a name="input_tenant_id"></a> [tenant\_id](#input\_tenant\_id) | The Entra ID (Azure AD) tenant ID | `string` | n/a | yes |
+| <a name="input_sampling_percentage"></a> [sampling\_percentage](#input\_sampling\_percentage) | Percentage of requests to log to Application Insights (0.0 to 100.0) | `number` | `100` | no |
 
 ## Outputs
 
