@@ -61,6 +61,39 @@ resource "azapi_resource" "mcp_api" {
   }
 }
 
+resource "azurerm_api_management_api_diagnostic" "mcp" {
+  identifier                = "applicationinsights"
+  api_name                  = azapi_resource.mcp_api.name
+  api_management_name       = var.apim_service_name
+  resource_group_name       = var.resource_group_name
+  api_management_logger_id  = var.api_management_logger_id
+  sampling_percentage       = var.sampling_percentage
+  always_log_errors         = true
+  log_client_ip             = true
+  verbosity                 = "information"
+  http_correlation_protocol = "W3C"
+
+  frontend_request {
+    body_bytes     = 0
+    headers_to_log = []
+  }
+
+  frontend_response {
+    body_bytes     = 0
+    headers_to_log = []
+  }
+
+  backend_request {
+    body_bytes     = 0
+    headers_to_log = []
+  }
+
+  backend_response {
+    body_bytes     = 0
+    headers_to_log = []
+  }
+}
+
 resource "azurerm_api_management_api_policy" "mcp" {
   api_name            = azapi_resource.mcp_api.name
   resource_group_name = var.resource_group_name

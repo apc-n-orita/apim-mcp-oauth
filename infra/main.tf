@@ -35,6 +35,18 @@ locals {
       {
         name  = "WEBSITE_AUTH_PRM_DEFAULT_WITH_SCOPES"
         value = "api://${azuread_application.oauth_app.client_id}/user_impersonation"
+      },
+      {
+        name  = "PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY"
+        value = "true"
+      },
+      {
+        name  = "OTEL_TRACES_SAMPLER"
+        value = "parentbased_traceidratio"
+      },
+      {
+        name  = "OTEL_TRACES_SAMPLER_ARG"
+        value = "1"
       }
     ]
   }
@@ -357,25 +369,29 @@ module "la_mcp" {
 
 
 module "func_mcp_api" {
-  source               = "./modules/core/gateway/apim-api/mcp-api"
-  api_name             = module.func_mcp.name
-  resource_group_name  = azurerm_resource_group.rg.name
-  apim_service_name    = module.apim.APIM_SERVICE_NAME
-  mcp_url              = module.func_mcp.uri
-  api_management_id    = module.apim.APIM_ID
-  mcp_api_uri_template = "/runtime/webhooks/mcp"
-  depends_on           = [module.func_mcp]
+  source                   = "./modules/core/gateway/apim-api/mcp-api"
+  api_name                 = module.func_mcp.name
+  resource_group_name      = azurerm_resource_group.rg.name
+  apim_service_name        = module.apim.APIM_SERVICE_NAME
+  mcp_url                  = module.func_mcp.uri
+  api_management_id        = module.apim.APIM_ID
+  mcp_api_uri_template     = "/runtime/webhooks/mcp"
+  api_management_logger_id = module.apim.API_MANAGEMENT_LOGGER_ID
+  sampling_percentage      = 100.0
+  depends_on               = [module.func_mcp]
 }
 
 module "la_mcp_api" {
-  source               = "./modules/core/gateway/apim-api/mcp-api"
-  api_name             = module.la_mcp.logicapp_name
-  resource_group_name  = azurerm_resource_group.rg.name
-  apim_service_name    = module.apim.APIM_SERVICE_NAME
-  mcp_url              = "https://${module.la_mcp.logicapp_default_hostname}"
-  api_management_id    = module.apim.APIM_ID
-  mcp_api_uri_template = "/api/mcpservers/projects/mcp"
-  depends_on           = [module.la_mcp]
+  source                   = "./modules/core/gateway/apim-api/mcp-api"
+  api_name                 = module.la_mcp.logicapp_name
+  resource_group_name      = azurerm_resource_group.rg.name
+  apim_service_name        = module.apim.APIM_SERVICE_NAME
+  mcp_url                  = "https://${module.la_mcp.logicapp_default_hostname}"
+  api_management_id        = module.apim.APIM_ID
+  mcp_api_uri_template     = "/api/mcpservers/projects/mcp"
+  api_management_logger_id = module.apim.API_MANAGEMENT_LOGGER_ID
+  sampling_percentage      = 100.0
+  depends_on               = [module.la_mcp]
 }
 
 module "mcp_product" {
@@ -396,5 +412,6 @@ module "oauth_app" {
   tenant_id                = data.azuread_client_config.current.tenant_id
   apim_gateway_url         = module.apim.gateway_url
   api_management_logger_id = module.apim.API_MANAGEMENT_LOGGER_ID
+  sampling_percentage      = 100.0
   depends_on               = [module.mcp_product]
 }

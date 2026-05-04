@@ -121,6 +121,19 @@ Ensure the following are installed locally:
 
 ### Deployment Steps
 
+**1. Build MCP Apps UI**
+
+Build the frontend widget that Azure Functions serves as the MCP Apps UI.
+
+```bash
+cd src/funcmcp/app
+npm install
+npm run build
+cd -
+```
+
+**2. Deploy**
+
 ```bash
 azd up
 ```
@@ -325,27 +338,11 @@ sequenceDiagram
 
 #### Steps
 
-**1. Edit MCP Configuration File**
+**1. Start MCP**
 
-Update `.vscode/mcp.json` with the URL from the azd environment.
+When prompted for Entra ID authentication, authenticate through the browser and verify that the tool list is correctly retrieved.
 
-```bash
-cd $(git rev-parse --show-toplevel)
-FUNC_URL="$(azd env get-value FUNC_MCP_ENDPOINTS)"
-LA_URL="$(azd env get-value LOGICAPP_MCP_ENDPOINTS)"
-jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" \
-  '{servers: {
-    "func-hello-mcp":  {type: "http", url: $func_url},
-    "logic-hello-mcp": {type: "http", url: $la_url}
-  }}' \
-  > .vscode/mcp.json
-```
-
-**2. Verify MCP Tool List Retrieval**
-
-After saving the configuration file, start MCP. When prompted for Entra ID authentication, authenticate and verify that the tool list is correctly retrieved.
-
-**3. Execute MCP Tool (Success Case)**
+**2. Execute MCP Tool (Success Case)**
 
 **GitHub Copilot Chat (agent mode):** Prompt the following and confirm that the MCP tool executes successfully.
 
@@ -353,13 +350,19 @@ After saving the configuration file, start MCP. When prompted for Entra ID authe
 Use func-hello-mcp to say hello to project1
 ```
 
-**GitHub Copilot CLI:** Run the following in the terminal and confirm the tool executes successfully.
+**GitHub Copilot CLI:** Launch the Copilot CLI interactive session.
 
 ```bash
-copilot -p "Use func-hello-mcp to say hello to project1" --allow-all-tools
+copilot
 ```
 
-**4. Execute MCP Tool (Rejection Case)**
+In the interactive session, send the following message and confirm that the MCP tool executes successfully.
+
+```
+Use func-hello-mcp to say hello to project1
+```
+
+**3. Execute MCP Tool (Rejection Case)**
 
 **GitHub Copilot Chat (agent mode):** Prompt the following and confirm that execution is rejected due to lack of permissions.
 
@@ -367,10 +370,10 @@ copilot -p "Use func-hello-mcp to say hello to project1" --allow-all-tools
 Use func-hello-mcp to say hello to project2
 ```
 
-**GitHub Copilot CLI:** Run the following and confirm the tool is rejected due to lack of permissions.
+**GitHub Copilot CLI:** In the interactive session, send the following message and confirm that execution is rejected due to lack of permissions.
 
-```bash
-copilot -p "Use func-hello-mcp to say hello to project2" --allow-all-tools
+```
+Use func-hello-mcp to say hello to project2
 ```
 
 ## Technical Details and Use Cases

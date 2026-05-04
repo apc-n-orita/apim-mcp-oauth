@@ -18,3 +18,9 @@ variable "tenant_id" {
   type        = string
   description = "The Entra ID (Azure AD) tenant ID"
 }
+
+variable "sampling_percentage" {
+  description = "Percentage of requests to log to Application Insights (0.0 to 100.0)"
+  type        = number
+  default     = 100.0
+}
