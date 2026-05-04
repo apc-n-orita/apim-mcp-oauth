@@ -6,3 +6,8 @@ __queuestorage__
 local.settings.json
 test
 .venv
+app/node_modules
+app/*.ts
+app/package*.json
+app/tsconfig.json
+app/vite.config.ts

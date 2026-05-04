@@ -41,3 +41,5 @@ __pycache__
 .venv
 .vscode/
 local.settings.json
+dist/
+node_modules
