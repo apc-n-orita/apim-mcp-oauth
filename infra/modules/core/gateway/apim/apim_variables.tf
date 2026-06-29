@@ -19,9 +19,15 @@ variable "sku" {
   default     = "Consumption"
 }
 
-variable "application_insights_name" {
-  description = "Azure Application Insights Name."
+variable "application_insights_id" {
+  description = "Azure Application Insights Resource ID."
   type        = string
+}
+
+variable "application_insights_connection_string" {
+  description = "Azure Application Insights Connection String."
+  type        = string
+  sensitive   = true
 }
 
 variable "skuCount" {

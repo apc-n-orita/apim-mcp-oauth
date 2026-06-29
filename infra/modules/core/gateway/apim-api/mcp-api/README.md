@@ -4,14 +4,14 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
-| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.58.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.60.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~>2.0.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.58.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.60.0 |
 
 ## Resources
 

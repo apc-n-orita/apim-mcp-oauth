@@ -144,6 +144,64 @@ azd up
 azd down
 ```
 
+## Troubleshooting
+
+### Application Insights Billing Feature 409 Conflict on `azd up`
+
+**Symptoms**
+
+Running `azd up` fails with one or both of the following errors.
+
+**Error 1: Billing Feature update failure**
+
+```
+Error: update Billing Feature for Component ...: unexpected status 409 (409 Conflict)
+  with error: PreconditionFailed (412)
+  with azurerm_application_insights.ai, on main.tf line 231
+```
+
+**Error 2: Resource already exists**
+
+```
+Error: a resource with the ID ".../providers/Microsoft.Insights/components/appi-..." already exists
+  with azurerm_application_insights.ai, on main.tf line 231
+```
+
+**Cause**
+
+The AzureRM provider always calls the Billing Feature PATCH API when applying `azurerm_application_insights`. If the ETag on the Azure side has drifted from the Terraform state, the call fails with 412 PreconditionFailed — a known provider behavior.
+
+Re-running `azd up` after Error 1 will trigger Error 2 as a follow-on failure.
+
+**Resolution** (if you encountered Error 1, then re-ran `azd up` and hit Error 2)
+
+1. Initialize modules and providers
+
+```bash
+terraform -chdir=infra init -upgrade
+```
+
+2. Import the existing Azure resource into Terraform state
+
+```bash
+ENV_NAME="$(azd env list --output json | jq -r '.[0].Name')"
+SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID --environment "$ENV_NAME")"
+RG="$(az group list --subscription "$SUBSCRIPTION_ID" --tag "azd-env-name=${ENV_NAME}" --query '[0].name' -o tsv)"
+APPINSIGHTS_ID="$(az resource list --subscription "$SUBSCRIPTION_ID" -g "$RG" --resource-type "Microsoft.Insights/components" --query '[0].id' -o tsv)"
+
+terraform -chdir=infra import \
+  -state=".azure/${ENV_NAME}/infra/terraform.tfstate" \
+  -var-file=".azure/${ENV_NAME}/infra/main.tfvars.json" \
+  azurerm_application_insights.ai \
+  "$APPINSIGHTS_ID"
+```
+
+3. Re-run the deployment
+
+```bash
+azd up
+```
+
 ## Hands-On
 
 ### AI Agent / Claude Code → APIM → MCP

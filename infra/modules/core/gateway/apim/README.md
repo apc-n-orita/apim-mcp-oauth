@@ -4,14 +4,14 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
-| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.58.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.60.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~>2.0.0 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.58.0 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.60.0 |
 
 ## Resources
 
@@ -22,13 +22,13 @@
 | [azurerm_api_management_diagnostic.all-api](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/api_management_diagnostic) | resource |
 | [azurerm_monitor_diagnostic_setting.apim_logger](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/monitor_diagnostic_setting) | resource |
 | [azurerm_role_assignment.monitoring_metrics_publisher](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
-| [azurerm_application_insights.appinsights](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/data-sources/application_insights) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_application_insights_name"></a> [application\_insights\_name](#input\_application\_insights\_name) | Azure Application Insights Name. | `string` | n/a | yes |
+| <a name="input_application_insights_connection_string"></a> [application\_insights\_connection\_string](#input\_application\_insights\_connection\_string) | Azure Application Insights Connection String. | `string` | n/a | yes |
+| <a name="input_application_insights_id"></a> [application\_insights\_id](#input\_application\_insights\_id) | Azure Application Insights Resource ID. | `string` | n/a | yes |
 | <a name="input_location"></a> [location](#input\_location) | The supported Azure location where the resource deployed | `string` | n/a | yes |
 | <a name="input_log_analytics_workspace_id"></a> [log\_analytics\_workspace\_id](#input\_log\_analytics\_workspace\_id) | Resource ID of the Log Analytics Workspace used commonly | `string` | n/a | yes |
 | <a name="input_name"></a> [name](#input\_name) | n/a | `string` | n/a | yes |

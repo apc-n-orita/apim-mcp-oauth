@@ -7,15 +7,15 @@
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
 | <a name="requirement_azuread"></a> [azuread](#requirement\_azuread) | ~>3.5.0 |
 | <a name="requirement_azurecaf"></a> [azurecaf](#requirement\_azurecaf) | ~>1.2.24 |
-| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.58.0 |
+| <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.60.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_azuread"></a> [azuread](#provider\_azuread) | 3.5.0 |
-| <a name="provider_azurecaf"></a> [azurecaf](#provider\_azurecaf) | 1.2.32 |
-| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.58.0 |
+| <a name="provider_azurecaf"></a> [azurecaf](#provider\_azurecaf) | 1.2.34 |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.60.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | 3.7.2 |
 
 ## Modules
