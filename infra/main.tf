@@ -239,18 +239,19 @@ resource "azurerm_application_insights" "ai" {
 
 
 module "apim" {
-  source                     = "./modules/core/gateway/apim"
-  location                   = var.location
-  rg_name                    = azurerm_resource_group.rg.name
-  tags                       = local.tags
-  sku                        = local.apim.sku
-  skuCount                   = local.apim.skuCount
-  name                       = "${azurecaf_name.apim_name.result}-${substr(local.resource_token, 0, 3)}"
-  publisher_email            = local.apim.publisher_email
-  publisher_name             = local.apim.publisher_name
-  application_insights_name  = azurerm_application_insights.ai.name
-  identity_type              = "SystemAssigned"
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.law.id
+  source                                 = "./modules/core/gateway/apim"
+  location                               = var.location
+  rg_name                                = azurerm_resource_group.rg.name
+  tags                                   = local.tags
+  sku                                    = local.apim.sku
+  skuCount                               = local.apim.skuCount
+  name                                   = "${azurecaf_name.apim_name.result}-${substr(local.resource_token, 0, 3)}"
+  publisher_email                        = local.apim.publisher_email
+  publisher_name                         = local.apim.publisher_name
+  application_insights_id                = azurerm_application_insights.ai.id
+  application_insights_connection_string = azurerm_application_insights.ai.connection_string
+  identity_type                          = "SystemAssigned"
+  log_analytics_workspace_id             = azurerm_log_analytics_workspace.law.id
 }
 
 

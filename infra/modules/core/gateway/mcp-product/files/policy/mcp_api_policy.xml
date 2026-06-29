@@ -31,25 +31,12 @@
 				<set-variable name="isAuthorized" value="@{
 					var jwt = (Jwt)context.Variables["jwt"];
 					if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
-
-					var userRoles = jwt.Claims["roles"]; // Assumed to be string[]
 					var toolName = (string)context.Variables["mcpToolName"];
-
-					// Wildcard matching logic
-					foreach (var role in userRoles) {
-						// Pattern A: Exact match (e.g., Mcp.Admin)
-						if (role.Equals(toolName, StringComparison.OrdinalIgnoreCase)) { return true; }
-
-						// Pattern B: Wildcard match
-						// Allows cases where role is "Mcp_Arithmetic_*" and tool name is "Mcp_Arithmetic_Add"
-						// Check prefix match excluding the trailing '*' from the role name
-						if (role.EndsWith("*")) {
-							var prefix = role.Substring(0, role.Length - 1);
-							// Case-insensitive check if tool name starts with the role's prefix
-							if (toolName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { return true; }
-						}
-					}
-					return false;
+					if (string.IsNullOrEmpty(toolName)) { return false; }
+					return jwt.Claims["roles"].Any(role =>
+						role.Equals(toolName, StringComparison.OrdinalIgnoreCase) ||
+						(role.EndsWith("*") && toolName.StartsWith(role.Substring(0, role.Length - 1), StringComparison.OrdinalIgnoreCase))
+					);
 				}" />
 				<choose>
 					<when condition="@((bool)context.Variables["isAuthorized"])">

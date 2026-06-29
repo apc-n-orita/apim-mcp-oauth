@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     azurerm = {
-      version = "~>4.58.0"
+      version = "~>4.60.0"
       source  = "hashicorp/azurerm"
     }
     azapi = {
@@ -11,10 +11,6 @@ terraform {
   }
 }
 
-data "azurerm_application_insights" "appinsights" {
-  name                = var.application_insights_name
-  resource_group_name = var.rg_name
-}
 # ------------------------------------------------------------------------------------------------------
 # Deploy api management service
 # ------------------------------------------------------------------------------------------------------
@@ -46,7 +42,7 @@ resource "azapi_resource" "apim_logger" {
       loggerType  = "applicationInsights"
       description = "Application Insights logger with system-assigned managed identity"
       credentials = {
-        connectionString = data.azurerm_application_insights.appinsights.connection_string
+        connectionString = var.application_insights_connection_string
         identityClientId = "systemAssigned"
       }
     }
@@ -54,7 +50,7 @@ resource "azapi_resource" "apim_logger" {
 }
 
 resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
-  scope                = data.azurerm_application_insights.appinsights.id
+  scope                = var.application_insights_id
   role_definition_name = "Monitoring Metrics Publisher"
   principal_id         = azurerm_api_management.apim.identity[0].principal_id
 }
