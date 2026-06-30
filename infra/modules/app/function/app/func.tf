@@ -12,11 +12,72 @@ terraform {
       source  = "hashicorp/random"
       version = "~>3.7.0"
     }
-
+    null = {
+      source  = "hashicorp/null"
+      version = "~>3.0"
+    }
   }
 }
 
-
+locals {
+  func_auth_body = jsonencode({
+    properties = {
+      clearInboundClaimsMapping = "false"
+      platform = {
+        enabled        = true
+        runtimeVersion = "~1"
+      }
+      globalValidation = {
+        requireAuthentication       = true
+        unauthenticatedClientAction = "Return403"
+        excludedPaths               = []
+      }
+      httpSettings = {
+        requireHttps = true
+        forwardProxy = { convention = "NoProxy" }
+        routes       = { apiPrefix = "/.auth" }
+      }
+      identityProviders = {
+        azureActiveDirectory = {
+          enabled = true
+          registration = {
+            clientId     = var.azuread_application_entra_app_client_id
+            openIdIssuer = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
+          }
+          login = { disableWWWAuthenticate = false }
+          validation = {
+            allowedAudiences = ["api://${var.azuread_application_entra_app_client_id}/"]
+            defaultAuthorizationPolicy = {
+              allowedPrincipals = {
+                identities = concat([var.apim_principal_id], var.additional_allowed_principal_ids)
+              }
+            }
+            jwtClaimChecks = {}
+          }
+        }
+      }
+      login = {
+        allowedExternalRedirectUrls   = []
+        preserveUrlFragmentsForLogins = false
+        routes                        = {}
+        cookieExpiration = {
+          convention       = "FixedTime"
+          timeToExpiration = "08:00:00"
+        }
+        nonce = {
+          nonceExpirationInterval = "00:05:00"
+          validateNonce           = true
+        }
+        tokenStore = {
+          azureBlobStorage           = {}
+          enabled                    = false
+          fileSystem                 = {}
+          tokenRefreshExtensionHours = 72.0
+        }
+      }
+    }
+  })
+}
 
 # Random suffix for ensuring uniqueness of Blob container name
 resource "random_string" "container_suffix" {
@@ -138,79 +199,22 @@ resource "time_sleep" "wait_function" {
 #   ]
 # }
 
-resource "azapi_update_resource" "func_auth" {
-  type        = "Microsoft.Web/sites/config@2023-12-01"
-  resource_id = "${azapi_resource.function.id}/config/authsettingsV2"
-
-  body = {
-    properties = {
-      clearInboundClaimsMapping = "false"
-      platform = {
-        enabled        = true
-        runtimeVersion = "~1"
-      }
-
-      globalValidation = {
-        requireAuthentication       = true
-        unauthenticatedClientAction = "Return403"
-        excludedPaths               = []
-      }
-
-      httpSettings = {
-        requireHttps = true
-        forwardProxy = {
-          convention = "NoProxy"
-        }
-        routes = {
-          apiPrefix = "/.auth"
-        }
-      }
-
-      identityProviders = {
-        azureActiveDirectory = {
-          enabled = true
-          registration = {
-            clientId     = var.azuread_application_entra_app_client_id
-            openIdIssuer = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
-          }
-          login = {
-            disableWWWAuthenticate = false
-          }
-          validation = {
-            allowedAudiences = [
-              "api://${var.azuread_application_entra_app_client_id}/"
-            ]
-            defaultAuthorizationPolicy = {
-              allowedPrincipals = {
-                identities = [var.apim_principal_id]
-              }
-            }
-            jwtClaimChecks = {}
-          }
-        }
-      }
-
-      login = {
-        allowedExternalRedirectUrls = []
-        cookieExpiration = {
-          convention       = "FixedTime"
-          timeToExpiration = "08:00:00"
-        }
-        nonce = {
-          nonceExpirationInterval = "00:05:00"
-          validateNonce           = true
-        }
-        preserveUrlFragmentsForLogins = false
-        routes                        = {}
-        tokenStore = {
-          azureBlobStorage           = {}
-          enabled                    = false
-          fileSystem                 = {}
-          tokenRefreshExtensionHours = 72.0
-        }
-      }
-    }
+resource "null_resource" "func_auth" {
+  triggers = {
+    body_hash = sha256(local.func_auth_body)
   }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      az rest \
+        --method PUT \
+        --url "https://management.azure.com${azapi_resource.function.id}/config/authsettingsV2?api-version=2023-12-01" \
+        --body '${local.func_auth_body}'
+    EOT
+  }
+
+  depends_on = [time_sleep.wait_function]
 }
 
 

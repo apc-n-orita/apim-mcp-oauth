@@ -9,14 +9,6 @@ locals {
     publisher_name  = "testuser"
   }
 
-  # Logic App Runtime Settings
-  logicapp_runtime = {
-    functions_extension_version = "~4"
-    powershell_version          = "7.4"
-    node_version                = "~22"
-    extension_bundle_version    = "[1.*, 2.0.0)"
-  }
-
   func = {
     tags = merge(local.tags, { azd-service-name = "funcmcp" })
     app_settings = [
@@ -47,6 +39,22 @@ locals {
       {
         name  = "OTEL_TRACES_SAMPLER_ARG"
         value = "1"
+      }
+    ]
+  }
+
+  logicapp = {
+    tags = merge(local.tags, { azd-service-name = "lamcp" })
+    runtime = {
+      functions_extension_version = "~4"
+      powershell_version          = "7.4"
+      node_version                = "~22"
+      extension_bundle_version    = "[1.*, 2.0.0)"
+    }
+    app_settings = [
+      {
+        name  = "OTEL_SERVICE_NAME"
+        value = "lamcp"
       }
     ]
   }
@@ -293,6 +301,10 @@ module "func_mcp" {
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
 
+  # 運用時に直接 Function App へアクセスしたいユーザー/SP の OID を追加する
+  # 例: additional_allowed_principal_ids = ["<user-oid>", "<sp-oid>"]
+  additional_allowed_principal_ids = var.ops_allowed_principal_ids
+
   depends_on = [module.func_mcp_storage]
 }
 
@@ -340,8 +352,9 @@ module "la_mcp" {
   location = var.location
   rg_name  = azurerm_resource_group.rg.name
   rg_id    = azurerm_resource_group.rg.id
-  tags     = merge(local.tags, { azd-service-name = "lamcp" })
+  tags     = local.logicapp.tags
   sku_name = "WS1"
+  app_settings = local.logicapp.app_settings
 
   # Storage account settings
   storage_account_id         = module.la_mcp_storage.storage_account_id
@@ -349,16 +362,16 @@ module "la_mcp" {
   storage_account_access_key = module.la_mcp_storage.primary_access_key
 
   # Runtime settings
-  functions_extension_version = local.logicapp_runtime.functions_extension_version
-  powershell_version          = local.logicapp_runtime.powershell_version
-  node_version                = local.logicapp_runtime.node_version
-  extension_bundle_version    = local.logicapp_runtime.extension_bundle_version
+  functions_extension_version = local.logicapp.runtime.functions_extension_version
+  powershell_version          = local.logicapp.runtime.powershell_version
+  node_version                = local.logicapp.runtime.node_version
+  extension_bundle_version    = local.logicapp.runtime.extension_bundle_version
 
   # Easy Auth settings
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
   apim_principal_id                       = module.apim.apim_principal_id
-
+  additional_allowed_principal_ids        = var.ops_allowed_principal_ids
 
   # Application Insights settings
   application_insights_connection_string = azurerm_application_insights.ai.connection_string
@@ -401,8 +414,8 @@ module "mcp_product" {
   resource_group_name = azurerm_resource_group.rg.name
   api_management_name = module.apim.APIM_SERVICE_NAME
   api_ids             = [module.func_mcp_api.api_id, module.la_mcp_api.api_id]
-  oauth_app_id        = azuread_application.oauth_app.client_id
-  tenant_id           = data.azuread_client_config.current.tenant_id
+  oauth_app_id = azuread_application.oauth_app.client_id
+  tenant_id    = data.azuread_client_config.current.tenant_id
 
 }
 

@@ -116,6 +116,12 @@ variable "primary_blob_endpoint" {
 #}
 
 
+variable "additional_allowed_principal_ids" {
+  type        = list(string)
+  default     = []
+  description = "OIDs of users or service principals allowed to access the Function App directly (e.g. for ops troubleshooting, bypassing APIM)"
+}
+
 variable "application_insights_connection_string" {
   type        = string
   description = "Application Insights connection string"

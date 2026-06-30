@@ -10,6 +10,8 @@ When VS Code (GitHub Copilot extension) accesses the MCP endpoint (`/mcp`), APIM
 
 In APIM, by configuring the following policy, you can return information about the OAuth authorization server (Entra ID) in JSON format. This metadata includes the resource URL, authorization server endpoint, supported authentication methods, and scopes.
 
+In addition, an `OPTIONS /.well-known/oauth-protected-resource` operation policy returns CORS preflight headers so browser-based clients can retrieve this metadata safely.
+
 VS Code uses this metadata to access the authorization server (e.g., `https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0`) and obtain an access token with the `api://{{oauth-app-id}}/user_impersonation` scope.
 
 ```xml
@@ -59,9 +61,16 @@ The token validation policy uses `validate-azure-ad-token` to perform the follow
 - **Verify Issuer**: Confirms that the `iss` claim is the correct URL for the specified tenant.
 - **Validate Audience**: Verifies that the token was issued for the correct resource (`api://{{oauth-app-id}}/`).
 
-#### Flexible Permission Management Using Wildcards
+#### Flexible Role-Based Tool Authorization
 
-During MCP tool execution (`tools/call`), the policy checks whether the token's `roles` claim permits the requested tool—supporting both exact match and wildcard (`*`) prefix match. For example, a role `Mcp_Arithmetic_*` automatically authorizes `Mcp_Arithmetic_Add`, `Mcp_Arithmetic_Sub`, and other tools with the same prefix. If authorized, the request proceeds; otherwise, a 403 error is returned.
+Authorization is enforced only when the MCP method is `tools/call`. The policy extracts `params.name` as the requested tool name and rejects the request if the name is empty.
+
+The requested tool is then compared with the access token's `roles` claim using the following rules:
+
+- **Exact match**: e.g., role `hello_project1` permits `hello_project1`.
+- **Wildcard prefix match**: e.g., role `common_*` permits tools whose names start with `common_`.
+
+If no rule matches, APIM returns `403 Forbidden`.
 
 #### Backend Protection with Managed Identity
 
@@ -101,25 +110,13 @@ During MCP tool execution (`tools/call`), the policy checks whether the token's 
                 <set-variable name="isAuthorized" value="@{
                     var jwt = (Jwt)context.Variables["jwt"];
                     if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
-
-                    var userRoles = jwt.Claims["roles"]; // Assumed to be string[]
                     var toolName = (string)context.Variables["mcpToolName"];
+                    if (string.IsNullOrEmpty(toolName)) { return false; }
 
-                    // Wildcard matching logic
-                    foreach (var role in userRoles) {
-                        // Pattern A: Exact match (e.g., hello_project1)
-                        if (role.Equals(toolName, StringComparison.OrdinalIgnoreCase)) { return true; }
-
-                        // Pattern B: Wildcard match
-                        // Allows cases where role is "Mcp_Arithmetic_*" and tool name is "Mcp_Arithmetic_Add"
-                        // Check prefix match excluding the trailing '*' from the role name
-                        if (role.EndsWith("*")) {
-                            var prefix = role.Substring(0, role.Length - 1);
-                            // Case-insensitive check if tool name starts with the role's prefix
-                            if (toolName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { return true; }
-                        }
-                    }
-                    return false;
+                    return jwt.Claims["roles"].Any(role =>
+                        role.Equals(toolName, StringComparison.OrdinalIgnoreCase) ||
+                        (role.EndsWith("*") && toolName.StartsWith(role.Substring(0, role.Length - 1), StringComparison.OrdinalIgnoreCase))
+                    );
                 }" />
                 <choose>
                     <when condition="@((bool)context.Variables["isAuthorized"])">
