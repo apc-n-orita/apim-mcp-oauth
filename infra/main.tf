@@ -133,6 +133,16 @@ resource "random_uuid" "secret" {}
 resource "azuread_application" "oauth_app" {
   display_name = "mcp-oauth-app-${substr(local.resource_token, 0, 3)}"
   owners       = [data.azuread_client_config.current.object_id]
+  #group_membership_claims = ["SecurityGroup"]
+  #group_membership_claims = ["ApplicationGroup"]
+
+  #optional_claims {
+  #  access_token {
+  #    name                  = "groups"
+  #    essential             = false
+  #    additional_properties = []
+  #  }
+  #}
 
   required_resource_access {
     resource_app_id = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
@@ -348,12 +358,12 @@ module "la_mcp_storage" {
 module "la_mcp" {
   source = "./modules/core/host/logicapp/standard"
   # Basic settings
-  name     = "la-mcp-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
-  location = var.location
-  rg_name  = azurerm_resource_group.rg.name
-  rg_id    = azurerm_resource_group.rg.id
-  tags     = local.logicapp.tags
-  sku_name = "WS1"
+  name         = "la-mcp-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
+  location     = var.location
+  rg_name      = azurerm_resource_group.rg.name
+  rg_id        = azurerm_resource_group.rg.id
+  tags         = local.logicapp.tags
+  sku_name     = "WS1"
   app_settings = local.logicapp.app_settings
 
   # Storage account settings
@@ -414,8 +424,8 @@ module "mcp_product" {
   resource_group_name = azurerm_resource_group.rg.name
   api_management_name = module.apim.APIM_SERVICE_NAME
   api_ids             = [module.func_mcp_api.api_id, module.la_mcp_api.api_id]
-  oauth_app_id = azuread_application.oauth_app.client_id
-  tenant_id    = data.azuread_client_config.current.tenant_id
+  oauth_app_id        = azuread_application.oauth_app.client_id
+  tenant_id           = data.azuread_client_config.current.tenant_id
 
 }
 
