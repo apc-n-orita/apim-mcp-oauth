@@ -7,7 +7,9 @@
         "type": "ParseJson",
         "runtimeConfiguration": {
           "secureData": {
-            "properties": ["inputs"]
+            "properties": [
+              "inputs"
+            ]
           }
         },
         "inputs": {
@@ -20,8 +22,12 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "typ": { "type": "string" },
-                    "val": { "type": "string" }
+                    "typ": {
+                      "type": "string"
+                    },
+                    "val": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -34,7 +40,10 @@
         "type": "Query",
         "runtimeConfiguration": {
           "secureData": {
-            "properties": ["inputs", "outputs"]
+            "properties": [
+              "inputs",
+              "outputs"
+            ]
           }
         },
         "inputs": {
@@ -42,14 +51,21 @@
           "where": "@and(equals(item()?['typ'], 'roles'), equals(item()?['val'], 'Mcp.Invoke'))"
         },
         "runAfter": {
-          "Parse_Client_Principal": ["Succeeded"]
+          "Parse_Client_Principal": [
+            "Succeeded"
+          ]
         }
       },
       "Check_Mcp_Invoke_Role": {
         "type": "If",
         "expression": {
           "and": [
-            { "greater": ["@length(body('Filter_Mcp_Invoke_Role'))", 0] }
+            {
+              "greater": [
+                "@length(body('Filter_Mcp_Invoke_Role'))",
+                0
+              ]
+            }
           ]
         },
         "actions": {
@@ -75,7 +91,9 @@
           }
         },
         "runAfter": {
-          "Filter_Mcp_Invoke_Role": ["Succeeded"]
+          "Filter_Mcp_Invoke_Role": [
+            "Succeeded"
+          ]
         }
       }
     },
@@ -84,7 +102,10 @@
         "type": "Request",
         "runtimeConfiguration": {
           "secureData": {
-            "properties": ["outputs"]
+            "properties": [
+              "inputs",
+              "outputs"
+            ]
           }
         },
         "description": "This example shows a simple \"Hello World\" operation for project1.\nThe application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly.",
