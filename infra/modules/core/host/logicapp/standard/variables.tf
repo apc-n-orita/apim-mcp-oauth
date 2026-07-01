@@ -104,11 +104,6 @@ variable "apim_principal_id" {
   type        = string
 }
 
-variable "additional_allowed_principal_ids" {
-  description = "OIDs of users or service principals allowed to access the Logic App directly (bypassing APIM), for ops troubleshooting"
-  type        = list(string)
-  default     = []
-}
 
 variable "app_settings" {
   description = "Additional app settings as a list of name/value pairs"

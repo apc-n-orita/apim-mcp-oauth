@@ -152,17 +152,13 @@ locals {
           }
           validation = {
             allowedAudiences = ["api://${var.azuread_application_entra_app_client_id}/"]
-            defaultAuthorizationPolicy = {
-              allowedPrincipals = {
-                identities = concat([var.apim_principal_id], var.additional_allowed_principal_ids)
-              }
-            }
-            jwtClaimChecks = {}
+            defaultAuthorizationPolicy = {}
+            jwtClaimChecks             = {}
           }
         }
       }
       login = {
-        allowedExternalRedirectUrls   = []
+        allowedExternalRedirectUrls = []
         preserveUrlFragmentsForLogins = false
         routes                        = {}
         cookieExpiration = {

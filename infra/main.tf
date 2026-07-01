@@ -129,6 +129,7 @@ resource "random_uuid" "hello_project1" {}
 resource "random_uuid" "hello_project2" {}
 resource "random_uuid" "common" {}
 resource "random_uuid" "secret" {}
+resource "random_uuid" "mcp_invoke_role" {}
 
 resource "azuread_application" "oauth_app" {
   display_name = "mcp-oauth-app-${substr(local.resource_token, 0, 3)}"
@@ -188,6 +189,15 @@ resource "azuread_application" "oauth_app" {
     value                = "secret_*"
   }
 
+  app_role {
+    allowed_member_types = ["User", "Application"]
+    description          = "Grants access to invoke MCP backends directly (APIM Managed Identity and ops group)"
+    display_name         = "Mcp.Invoke"
+    enabled              = true
+    id                   = random_uuid.mcp_invoke_role.result
+    value                = "Mcp.Invoke"
+  }
+
   lifecycle {
     ignore_changes = [
       identifier_uris,
@@ -200,6 +210,34 @@ resource "azuread_application" "oauth_app" {
 resource "azuread_service_principal" "oauth_app_sp" {
   client_id = azuread_application.oauth_app.client_id
   owners    = [data.azuread_client_config.current.object_id]
+}
+
+# Ops group for direct backend access (bypassing APIM), for troubleshooting
+resource "azuread_group" "ops_mcp_access" {
+  display_name     = "ops-mcp-access-${var.environment_name}"
+  security_enabled = true
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_group_member" "ops_mcp_access_current_user" {
+  group_object_id  = azuread_group.ops_mcp_access.object_id
+  member_object_id = data.azuread_client_config.current.object_id
+}
+
+
+# Assign Mcp.Invoke role to APIM Managed Identity
+resource "azuread_app_role_assignment" "apim_mcp_invoke" {
+  principal_object_id = module.apim.apim_principal_id
+  app_role_id         = azuread_service_principal.oauth_app_sp.app_role_ids["Mcp.Invoke"]
+  resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
+  depends_on          = [module.apim]
+}
+
+# Assign Mcp.Invoke role to ops group
+resource "azuread_app_role_assignment" "ops_group_mcp_invoke" {
+  principal_object_id = azuread_group.ops_mcp_access.object_id
+  app_role_id         = azuread_service_principal.oauth_app_sp.app_role_ids["Mcp.Invoke"]
+  resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
 }
 
 # Assign hello_project1 role to user
@@ -306,14 +344,9 @@ module "func_mcp" {
   application_insights_connection_string = azurerm_application_insights.ai.connection_string
   identity_client_id                     = azurerm_user_assigned_identity.mcp.client_id
   identity_id                            = azurerm_user_assigned_identity.mcp.id
-  apim_principal_id                      = module.apim.apim_principal_id
 
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
-
-  # 運用時に直接 Function App へアクセスしたいユーザー/SP の OID を追加する
-  # 例: additional_allowed_principal_ids = ["<user-oid>", "<sp-oid>"]
-  additional_allowed_principal_ids = var.ops_allowed_principal_ids
 
   depends_on = [module.func_mcp_storage]
 }
@@ -381,7 +414,6 @@ module "la_mcp" {
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
   apim_principal_id                       = module.apim.apim_principal_id
-  additional_allowed_principal_ids        = var.ops_allowed_principal_ids
 
   # Application Insights settings
   application_insights_connection_string = azurerm_application_insights.ai.connection_string

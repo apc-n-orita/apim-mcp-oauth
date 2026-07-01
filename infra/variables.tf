@@ -15,8 +15,3 @@ variable "subscription_id" {
   type        = string
 }
 
-variable "ops_allowed_principal_ids" {
-  description = "OIDs of users or service principals allowed to access the Function App directly (bypassing APIM), for ops troubleshooting"
-  type        = list(string)
-  default     = []
-}

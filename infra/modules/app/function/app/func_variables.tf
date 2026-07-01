@@ -9,11 +9,6 @@ variable "tenant_id" {
   description = "Azure AD Tenant ID"
 }
 
-variable "apim_principal_id" {
-  type        = string
-  description = "Principal ID of APIM Managed Identity (for allowedPrincipals)"
-}
-
 # Additional variable for Function App azapi_resource
 variable "identity_id" {
   type        = string
@@ -116,11 +111,6 @@ variable "primary_blob_endpoint" {
 #}
 
 
-variable "additional_allowed_principal_ids" {
-  type        = list(string)
-  default     = []
-  description = "OIDs of users or service principals allowed to access the Function App directly (e.g. for ops troubleshooting, bypassing APIM)"
-}
 
 variable "application_insights_connection_string" {
   type        = string

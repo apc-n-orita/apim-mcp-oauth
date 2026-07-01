@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -23,8 +24,38 @@ else:
     logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set. Tracing disabled.")
 
 tracer = trace.get_tracer(__name__)
+_logger = logging.getLogger(__name__)
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+
+def _check_mcp_invoke_role(principal_header: str) -> bool:
+    """Validate that the caller has the Mcp.Invoke App Role.
+
+    Reads the x-ms-client-principal header injected by Easy Auth and checks
+    whether the claims array contains {"typ": "roles", "val": "Mcp.Invoke"}.
+
+    Reference: https://learn.microsoft.com/azure/app-service/configure-authentication-user-identities
+    """
+    if not principal_header:
+        _logger.warning("Mcp.Invoke role check failed.", extra={"reason": "header_missing"})
+        return False
+    try:
+        principal = json.loads(base64.b64decode(principal_header).decode("utf-8"))
+        if any(
+            c.get("typ") == "roles" and c.get("val") == "Mcp.Invoke"
+            for c in principal.get("claims", [])
+        ):
+            return True
+        _logger.warning("Mcp.Invoke role check failed.", extra={"reason": "role_not_found"})
+        return False
+    except Exception as e:
+        _logger.warning(
+            "Mcp.Invoke role check failed.",
+            extra={"reason": "decode_error", "error.type": type(e).__name__},
+        )
+        return False
+
 
 # MCP Apps UI constants
 HELLO_WIDGET_URI = "ui://hello/index.html"
@@ -45,15 +76,14 @@ RESOURCE_METADATA = json.dumps({"ui": {"prefersBorder": True}})
     metadata=RESOURCE_METADATA
 )
 def get_hello_widget(context) -> str:
-    logging.info("Getting hello widget")
+    _logger.info("Getting hello widget")
     try:
         current_dir = Path(__file__).parent
         file_path = current_dir / "app" / "dist" / "index.html"
         if file_path.exists():
             return file_path.read_text(encoding="utf-8")
-        else:
-            logging.warning(f"Hello widget file not found at: {file_path}")
-            return """<!DOCTYPE html>
+        _logger.warning(f"Hello widget file not found at: {file_path}")
+        return """<!DOCTYPE html>
 <html>
 <head><title>Hello Widget</title></head>
 <body>
@@ -62,7 +92,7 @@ def get_hello_widget(context) -> str:
 </body>
 </html>"""
     except Exception as e:
-        logging.error(f"Error reading hello widget file: {e}")
+        _logger.error(f"Error reading hello widget file: {e}")
         return """<!DOCTYPE html>
 <html>
 <head><title>Hello Widget Error</title></head>
@@ -73,6 +103,11 @@ def get_hello_widget(context) -> str:
 </html>"""
 
 
+def _get_mcp_headers(ctx: func.MCPToolContext) -> dict:
+    raw: dict = ctx.get("transport", {}).get("properties", {}).get("headers", {})
+    return {k.lower(): v for k, v in raw.items()}
+
+
 def _echo_tool(tool_name: str, message: str) -> str:
     with tracer.start_as_current_span(tool_name) as span:
         span.set_attribute("mcp.tool.name", tool_name)
@@ -81,7 +116,7 @@ def _echo_tool(tool_name: str, message: str) -> str:
             if not message:
                 span.set_attribute("mcp.tool.success", False)
                 return "No 'message' provided."
-            logging.info(f"{tool_name} called with message: {message}")
+            _logger.info(f"{tool_name} called with message: {message}")
             span.set_attribute("mcp.tool.success", True)
             return message
         except Exception as e:
@@ -92,29 +127,36 @@ def _echo_tool(tool_name: str, message: str) -> str:
             raise
 
 
+def _run_mcp_tool(tool_name: str, message: str, ctx: func.MCPToolContext) -> str:
+    if not _check_mcp_invoke_role(_get_mcp_headers(ctx).get("x-ms-client-principal", "")):
+        _logger.warning("Access denied.", extra={"tool": tool_name})
+        return "Forbidden: Mcp.Invoke role required"
+    return _echo_tool(tool_name, message)
+
+
 @app.mcp_tool(metadata=TOOL_METADATA)
 @app.mcp_tool_property(arg_name="message", description="A text message provided by the user. This field must contain between 1 and 1000 characters.")
-def hello_project1(message: str) -> str:
+def hello_project1(message: str, ctx: func.MCPToolContext) -> str:
     """This example shows a simple Hello World operation for project1. The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly."""
-    return _echo_tool("hello_project1", message)
+    return _run_mcp_tool("hello_project1", message, ctx)
 
 
 @app.mcp_tool(metadata=TOOL_METADATA)
 @app.mcp_tool_property(arg_name="message", description="A text message provided by the user. This field must contain between 1 and 1000 characters.")
-def hello_project2(message: str) -> str:
+def hello_project2(message: str, ctx: func.MCPToolContext) -> str:
     """This example shows a simple Hello World operation for project2. The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly."""
-    return _echo_tool("hello_project2", message)
+    return _run_mcp_tool("hello_project2", message, ctx)
 
 
 @app.mcp_tool(metadata=TOOL_METADATA)
 @app.mcp_tool_property(arg_name="message", description="A text message provided by the user. This field must contain between 1 and 1000 characters.")
-def common_helloproject(message: str) -> str:
+def common_helloproject(message: str, ctx: func.MCPToolContext) -> str:
     """This example shows a simple Hello World operation for common project. The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly."""
-    return _echo_tool("common_helloproject", message)
+    return _run_mcp_tool("common_helloproject", message, ctx)
 
 
 @app.mcp_tool(metadata=TOOL_METADATA)
 @app.mcp_tool_property(arg_name="message", description="A text message provided by the user. This field must contain between 1 and 1000 characters.")
-def secret_helloproject(message: str) -> str:
+def secret_helloproject(message: str, ctx: func.MCPToolContext) -> str:
     """This example shows a simple Hello World operation for secret project. The application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly."""
-    return _echo_tool("secret_helloproject", message)
+    return _run_mcp_tool("secret_helloproject", message, ctx)
