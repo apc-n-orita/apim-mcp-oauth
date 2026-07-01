@@ -5,6 +5,7 @@
 |------|---------|
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.60.0 |
+| <a name="requirement_null"></a> [null](#requirement\_null) | ~>3.0 |
 | <a name="requirement_random"></a> [random](#requirement\_random) | ~>3.7.0 |
 
 ## Providers
@@ -13,6 +14,7 @@
 |------|---------|
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~>2.0.0 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.60.0 |
+| <a name="provider_null"></a> [null](#provider\_null) | ~>3.0 |
 | <a name="provider_random"></a> [random](#provider\_random) | ~>3.7.0 |
 | <a name="provider_time"></a> [time](#provider\_time) | n/a |
 
@@ -21,8 +23,8 @@
 | Name | Type |
 |------|------|
 | [azapi_resource.function](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) | resource |
-| [azapi_update_resource.func_auth](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/update_resource) | resource |
 | [azurerm_storage_container.function_blob_container](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container) | resource |
+| [null_resource.func_auth](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 | [random_string.container_suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) | resource |
 | [time_sleep.wait_function](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) | resource |
 
@@ -30,7 +32,6 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_apim_principal_id"></a> [apim\_principal\_id](#input\_apim\_principal\_id) | Principal ID of APIM Managed Identity (for allowedPrincipals) | `string` | n/a | yes |
 | <a name="input_app_service_plan_id"></a> [app\_service\_plan\_id](#input\_app\_service\_plan\_id) | App Service Plan resource ID | `string` | n/a | yes |
 | <a name="input_application_insights_connection_string"></a> [application\_insights\_connection\_string](#input\_application\_insights\_connection\_string) | Application Insights connection string | `string` | n/a | yes |
 | <a name="input_azuread_application_entra_app_client_id"></a> [azuread\_application\_entra\_app\_client\_id](#input\_azuread\_application\_entra\_app\_client\_id) | Client ID of the Entra ID application for AAD auth | `string` | n/a | yes |

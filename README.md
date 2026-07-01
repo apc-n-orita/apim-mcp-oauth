@@ -104,7 +104,15 @@ APIM's Managed Identity (MSI) enables secure access to MCP Backend, eliminating 
 
 ### 5. Backend Protection
 
-MCP Backend uses Easy Auth to allow only APIM's MSI, preventing direct external access.
+MCP Backend enforces authorization at two layers:
+
+- **Easy Auth (Entra ID)**: Platform-level token validation — rejects any request without a valid Entra ID bearer token.
+- **App Role check (`Mcp.Invoke`)**: Application-level check — rejects callers whose token does not contain the `Mcp.Invoke` App Role, even if the token itself is valid.
+
+This means only two types of callers can reach the backend directly:
+
+1. **APIM Managed Identity** — holds a permanent `Mcp.Invoke` role assignment, used for all production traffic.
+2. **Ops Entra ID group members** — assigned `Mcp.Invoke` via the ops group, for direct-access troubleshooting and testing.
 
 ## Deploy Hands-On Environment
 
@@ -340,7 +348,7 @@ jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" --arg helper "$HELPER" \
   > .mcp.json
 ```
 
-**3. Execute MCP Tool (Success Case)**
+**2. Execute MCP Tool (Success Case)**
 
 Prompt the following in Claude Code and confirm that the MCP tool executes successfully.
 
@@ -348,7 +356,7 @@ Prompt the following in Claude Code and confirm that the MCP tool executes succe
 Use func-hello-mcp to say hello to project1
 ```
 
-**4. Execute MCP Tool (Rejection Case)**
+**3. Execute MCP Tool (Rejection Case)**
 
 Prompt the following and confirm that execution is rejected due to lack of permissions.
 

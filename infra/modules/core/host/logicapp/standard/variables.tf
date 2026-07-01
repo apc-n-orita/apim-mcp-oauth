@@ -103,3 +103,13 @@ variable "apim_principal_id" {
   description = "The Principal ID of the APIM Managed Identity (for authsettings)"
   type        = string
 }
+
+
+variable "app_settings" {
+  description = "Additional app settings as a list of name/value pairs"
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default = []
+}

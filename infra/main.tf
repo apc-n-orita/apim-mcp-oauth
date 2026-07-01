@@ -9,14 +9,6 @@ locals {
     publisher_name  = "testuser"
   }
 
-  # Logic App Runtime Settings
-  logicapp_runtime = {
-    functions_extension_version = "~4"
-    powershell_version          = "7.4"
-    node_version                = "~22"
-    extension_bundle_version    = "[1.*, 2.0.0)"
-  }
-
   func = {
     tags = merge(local.tags, { azd-service-name = "funcmcp" })
     app_settings = [
@@ -47,6 +39,22 @@ locals {
       {
         name  = "OTEL_TRACES_SAMPLER_ARG"
         value = "1"
+      }
+    ]
+  }
+
+  logicapp = {
+    tags = merge(local.tags, { azd-service-name = "lamcp" })
+    runtime = {
+      functions_extension_version = "~4"
+      powershell_version          = "7.4"
+      node_version                = "~22"
+      extension_bundle_version    = "[1.*, 2.0.0)"
+    }
+    app_settings = [
+      {
+        name  = "OTEL_SERVICE_NAME"
+        value = "lamcp"
       }
     ]
   }
@@ -121,10 +129,21 @@ resource "random_uuid" "hello_project1" {}
 resource "random_uuid" "hello_project2" {}
 resource "random_uuid" "common" {}
 resource "random_uuid" "secret" {}
+resource "random_uuid" "mcp_invoke_role" {}
 
 resource "azuread_application" "oauth_app" {
   display_name = "mcp-oauth-app-${substr(local.resource_token, 0, 3)}"
   owners       = [data.azuread_client_config.current.object_id]
+  #group_membership_claims = ["SecurityGroup"]
+  #group_membership_claims = ["ApplicationGroup"]
+
+  #optional_claims {
+  #  access_token {
+  #    name                  = "groups"
+  #    essential             = false
+  #    additional_properties = []
+  #  }
+  #}
 
   required_resource_access {
     resource_app_id = "00000003-0000-0000-c000-000000000000" # Microsoft Graph
@@ -170,6 +189,15 @@ resource "azuread_application" "oauth_app" {
     value                = "secret_*"
   }
 
+  app_role {
+    allowed_member_types = ["User", "Application"]
+    description          = "Grants access to invoke MCP backends directly (APIM Managed Identity and ops group)"
+    display_name         = "Mcp.Invoke"
+    enabled              = true
+    id                   = random_uuid.mcp_invoke_role.result
+    value                = "Mcp.Invoke"
+  }
+
   lifecycle {
     ignore_changes = [
       identifier_uris,
@@ -182,6 +210,34 @@ resource "azuread_application" "oauth_app" {
 resource "azuread_service_principal" "oauth_app_sp" {
   client_id = azuread_application.oauth_app.client_id
   owners    = [data.azuread_client_config.current.object_id]
+}
+
+# Ops group for direct backend access (bypassing APIM), for troubleshooting
+resource "azuread_group" "ops_mcp_access" {
+  display_name     = "ops-mcp-access-${var.environment_name}"
+  security_enabled = true
+  owners           = [data.azuread_client_config.current.object_id]
+}
+
+resource "azuread_group_member" "ops_mcp_access_current_user" {
+  group_object_id  = azuread_group.ops_mcp_access.object_id
+  member_object_id = data.azuread_client_config.current.object_id
+}
+
+
+# Assign Mcp.Invoke role to APIM Managed Identity
+resource "azuread_app_role_assignment" "apim_mcp_invoke" {
+  principal_object_id = module.apim.apim_principal_id
+  app_role_id         = azuread_service_principal.oauth_app_sp.app_role_ids["Mcp.Invoke"]
+  resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
+  depends_on          = [module.apim]
+}
+
+# Assign Mcp.Invoke role to ops group
+resource "azuread_app_role_assignment" "ops_group_mcp_invoke" {
+  principal_object_id = azuread_group.ops_mcp_access.object_id
+  app_role_id         = azuread_service_principal.oauth_app_sp.app_role_ids["Mcp.Invoke"]
+  resource_object_id  = azuread_service_principal.oauth_app_sp.object_id
 }
 
 # Assign hello_project1 role to user
@@ -288,7 +344,6 @@ module "func_mcp" {
   application_insights_connection_string = azurerm_application_insights.ai.connection_string
   identity_client_id                     = azurerm_user_assigned_identity.mcp.client_id
   identity_id                            = azurerm_user_assigned_identity.mcp.id
-  apim_principal_id                      = module.apim.apim_principal_id
 
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
@@ -336,12 +391,13 @@ module "la_mcp_storage" {
 module "la_mcp" {
   source = "./modules/core/host/logicapp/standard"
   # Basic settings
-  name     = "la-mcp-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
-  location = var.location
-  rg_name  = azurerm_resource_group.rg.name
-  rg_id    = azurerm_resource_group.rg.id
-  tags     = merge(local.tags, { azd-service-name = "lamcp" })
-  sku_name = "WS1"
+  name         = "la-mcp-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
+  location     = var.location
+  rg_name      = azurerm_resource_group.rg.name
+  rg_id        = azurerm_resource_group.rg.id
+  tags         = local.logicapp.tags
+  sku_name     = "WS1"
+  app_settings = local.logicapp.app_settings
 
   # Storage account settings
   storage_account_id         = module.la_mcp_storage.storage_account_id
@@ -349,16 +405,15 @@ module "la_mcp" {
   storage_account_access_key = module.la_mcp_storage.primary_access_key
 
   # Runtime settings
-  functions_extension_version = local.logicapp_runtime.functions_extension_version
-  powershell_version          = local.logicapp_runtime.powershell_version
-  node_version                = local.logicapp_runtime.node_version
-  extension_bundle_version    = local.logicapp_runtime.extension_bundle_version
+  functions_extension_version = local.logicapp.runtime.functions_extension_version
+  powershell_version          = local.logicapp.runtime.powershell_version
+  node_version                = local.logicapp.runtime.node_version
+  extension_bundle_version    = local.logicapp.runtime.extension_bundle_version
 
   # Easy Auth settings
   tenant_id                               = data.azuread_client_config.current.tenant_id
   azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
   apim_principal_id                       = module.apim.apim_principal_id
-
 
   # Application Insights settings
   application_insights_connection_string = azurerm_application_insights.ai.connection_string

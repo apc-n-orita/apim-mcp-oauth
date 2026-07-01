@@ -2,6 +2,128 @@
 
 ## Technical Details
 
+### Backend MCP Authorization Architecture
+
+#### Overview
+
+Backend MCP (Azure Functions and Logic Apps) enforces authorization at two independent layers, so that even if one layer is misconfigured, the other still blocks unauthorized access.
+
+| Layer | Mechanism | Enforced by |
+|---|---|---|
+| Transport | Easy Auth (Entra ID token validation) | Azure App Service platform |
+| Application | `Mcp.Invoke` App Role check | Function App code / Logic App workflow |
+
+#### Who Can Access the Backend Directly
+
+Only the following two identities hold the `Mcp.Invoke` App Role and can reach the backend:
+
+| Identity | How `Mcp.Invoke` is granted | Typical use |
+|---|---|---|
+| APIM Managed Identity | Direct App Role assignment to the MSI | All production traffic via APIM |
+| Ops Entra ID group members | App Role assignment to the ops security group | Troubleshooting, integration testing |
+
+Normal end-users go through APIM. APIM validates the user token (including per-tool role claims), then replaces it with the APIM MSI token before forwarding to the backend. The backend never sees the user's original token.
+
+#### Function App: Authorization Implementation
+
+**Easy Auth** (`webhookAuthorizationLevel: "Anonymous"` in `host.json`)
+
+```json
+"extensions": {
+  "mcp": {
+    "system": {
+      "webhookAuthorizationLevel": "Anonymous"
+    }
+  }
+}
+```
+
+Setting `webhookAuthorizationLevel` to `"Anonymous"` disables the MCP extension system key. Easy Auth (configured separately on the App Service) becomes the sole transport-layer guard — it validates the Entra ID bearer token and injects `x-ms-client-principal` (Base64-encoded claims JSON) into request headers.
+
+**Application-level `Mcp.Invoke` check** (`function_app.py`)
+
+The function code decodes `x-ms-client-principal` and checks for `{"typ": "roles", "val": "Mcp.Invoke"}` in the claims array. If the claim is absent, the tool returns `"Forbidden: Mcp.Invoke role required"` without raising an exception (which would generate unnecessary Application Insights stack traces).
+
+```python
+def _check_mcp_invoke_role(principal_header: str) -> bool:
+    # Decodes x-ms-client-principal injected by Easy Auth.
+    # Logs only the failure reason (header_missing / role_not_found / decode_error),
+    # never the token content itself.
+    ...
+
+def _run_mcp_tool(tool_name: str, message: str, ctx: func.MCPToolContext) -> str:
+    if not _check_mcp_invoke_role(_get_mcp_headers(ctx).get("x-ms-client-principal", "")):
+        _logger.warning("Access denied.", extra={"tool": tool_name})
+        return "Forbidden: Mcp.Invoke role required"
+    return _echo_tool(tool_name, message)
+```
+
+#### Logic App: Authorization Implementation
+
+**OAuth2-only mode** (`host.json`)
+
+```json
+"extensions": {
+  "workflow": {
+    "McpServerEndpoints": {
+      "enable": true,
+      "authentication": {
+        "type": "oauth2"
+      }
+    }
+  }
+}
+```
+
+Setting `authentication.type` to `"oauth2"` disables the MCP API key. Only OAuth2 bearer tokens are accepted.
+
+**Application-level `Mcp.Invoke` check** (workflow actions)
+
+Each Logic App workflow decodes `x-ms-client-principal` injected by Easy Auth and filters the claims array for `Mcp.Invoke`:
+
+```
+Parse_Client_Principal → Filter_Mcp_Invoke_Role → Check_Mcp_Invoke_Role
+```
+
+If no matching claim is found, the workflow returns HTTP 403.
+
+#### Access Token Flow: APIM as Token Broker
+
+When a request arrives at APIM with a user token:
+
+1. `validate-azure-ad-token` validates signature, issuer, audience, and expiry.
+2. For `tools/call`, the policy checks per-tool role claims (`roles` array) — exact match or wildcard prefix (e.g., `common_*`).
+3. `authentication-managed-identity` acquires the APIM MSI token (which carries `Mcp.Invoke`).
+4. The `Authorization` header is replaced with the MSI token before forwarding to the backend.
+
+The backend only ever sees the MSI token — never the end-user's token.
+
+#### PIM (Privileged Identity Management) for JIT Access in Production
+
+**Current hands-on setup**: The user who runs `azd up` is assigned directly as an **active member** of the ops group. Active membership is permanent until explicitly removed.
+
+**Production recommendation**: Use **PIM for Groups** to grant **eligible membership** instead of active membership. Eligible members must explicitly activate their group membership (JIT access) for a limited time window before they can access the backend directly.
+
+| | Current hands-on | Production recommendation |
+|---|---|---|
+| Membership type | Active (permanent) | Eligible (JIT) |
+| Activation required | No | Yes (via Entra portal / My Access) |
+| Maximum activation duration | N/A | Configurable (e.g., 8 hours) |
+| Approval workflow | N/A | Optional (can require approver) |
+| MFA on activation | N/A | Enforceable |
+| Audit trail | Group membership log | PIM activation log (with justification) |
+
+**How PIM for Groups works** ([MS Docs: PIM for Groups](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/concept-pim-for-groups)):
+
+1. Bring the ops security group under PIM management in the Entra admin center.
+2. Assign ops team members as **eligible** (not active) members of the group.
+3. When a member needs direct backend access, they activate their membership via [My Access](https://myaccess.microsoft.com) or the Entra portal — the activation is reflected in new tokens within seconds.
+4. After the activation window expires, the membership is deactivated automatically.
+
+> **Note on token caching**: PIM activates/deactivates group membership in Entra ID within seconds. However, existing cached access tokens (e.g., from `az account get-access-token`) retain the old claims until they expire (up to 1 hour). Obtain a fresh token after activating PIM membership to immediately reflect the `Mcp.Invoke` role.
+
+**License requirement**: PIM for Groups requires **Microsoft Entra ID P2** or **Microsoft Entra ID Governance** for each eligible user.
+
 ### APIM Policy Explanation
 
 #### Overview of OAuth Metadata Policy
@@ -9,6 +131,8 @@
 When VS Code (GitHub Copilot extension) accesses the MCP endpoint (`/mcp`), APIM returns a 401 response because authentication is required. At this point, the client automatically sends a GET request to APIM's `/.well-known/oauth-protected-resource` endpoint to retrieve OAuth metadata.
 
 In APIM, by configuring the following policy, you can return information about the OAuth authorization server (Entra ID) in JSON format. This metadata includes the resource URL, authorization server endpoint, supported authentication methods, and scopes.
+
+In addition, an `OPTIONS /.well-known/oauth-protected-resource` operation policy returns CORS preflight headers so browser-based clients can retrieve this metadata safely.
 
 VS Code uses this metadata to access the authorization server (e.g., `https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0`) and obtain an access token with the `api://{{oauth-app-id}}/user_impersonation` scope.
 
@@ -59,13 +183,20 @@ The token validation policy uses `validate-azure-ad-token` to perform the follow
 - **Verify Issuer**: Confirms that the `iss` claim is the correct URL for the specified tenant.
 - **Validate Audience**: Verifies that the token was issued for the correct resource (`api://{{oauth-app-id}}/`).
 
-#### Flexible Permission Management Using Wildcards
+#### Flexible Role-Based Tool Authorization
 
-During MCP tool execution (`tools/call`), the policy checks whether the token's `roles` claim permits the requested tool—supporting both exact match and wildcard (`*`) prefix match. For example, a role `Mcp_Arithmetic_*` automatically authorizes `Mcp_Arithmetic_Add`, `Mcp_Arithmetic_Sub`, and other tools with the same prefix. If authorized, the request proceeds; otherwise, a 403 error is returned.
+Authorization is enforced only when the MCP method is `tools/call`. The policy extracts `params.name` as the requested tool name and rejects the request if the name is empty.
+
+The requested tool is then compared with the access token's `roles` claim using the following rules:
+
+- **Exact match**: e.g., role `hello_project1` permits `hello_project1`.
+- **Wildcard prefix match**: e.g., role `common_*` permits tools whose names start with `common_`.
+
+If no rule matches, APIM returns `403 Forbidden`.
 
 #### Backend Protection with Managed Identity
 
-`authentication-managed-identity` overwrites the token with APIM's Managed Identity token and sends it to the backend MCP (Logic Apps/Functions). By configuring Easy Auth to allow only APIM's Managed Identity, access other than through APIM is blocked.
+`authentication-managed-identity` overwrites the Authorization header with APIM's Managed Identity token before forwarding to the backend MCP (Logic Apps/Functions). The backend enforces authorization via Easy Auth + `Mcp.Invoke` App Role check, so only callers with that role (APIM MSI or ops group members) can reach it — see [Backend MCP Authorization Architecture](#backend-mcp-authorization-architecture) for details.
 
 ```xml
 <!--
@@ -101,25 +232,13 @@ During MCP tool execution (`tools/call`), the policy checks whether the token's 
                 <set-variable name="isAuthorized" value="@{
                     var jwt = (Jwt)context.Variables["jwt"];
                     if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
-
-                    var userRoles = jwt.Claims["roles"]; // Assumed to be string[]
                     var toolName = (string)context.Variables["mcpToolName"];
+                    if (string.IsNullOrEmpty(toolName)) { return false; }
 
-                    // Wildcard matching logic
-                    foreach (var role in userRoles) {
-                        // Pattern A: Exact match (e.g., hello_project1)
-                        if (role.Equals(toolName, StringComparison.OrdinalIgnoreCase)) { return true; }
-
-                        // Pattern B: Wildcard match
-                        // Allows cases where role is "Mcp_Arithmetic_*" and tool name is "Mcp_Arithmetic_Add"
-                        // Check prefix match excluding the trailing '*' from the role name
-                        if (role.EndsWith("*")) {
-                            var prefix = role.Substring(0, role.Length - 1);
-                            // Case-insensitive check if tool name starts with the role's prefix
-                            if (toolName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) { return true; }
-                        }
-                    }
-                    return false;
+                    return jwt.Claims["roles"].Any(role =>
+                        role.Equals(toolName, StringComparison.OrdinalIgnoreCase) ||
+                        (role.EndsWith("*") && toolName.StartsWith(role.Substring(0, role.Length - 1), StringComparison.OrdinalIgnoreCase))
+                    );
                 }" />
                 <choose>
                     <when condition="@((bool)context.Variables["isAuthorized"])">

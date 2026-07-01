@@ -8,6 +8,10 @@ terraform {
       source  = "Azure/azapi"
       version = "~>2.0.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~>3.0"
+    }
   }
 }
 
@@ -79,10 +83,8 @@ resource "azapi_resource" "logicapp" {
             { name = "LOGIC_APPS_POWERSHELL_VERSION", value = var.powershell_version },
             { name = "WEBSITE_NODE_DEFAULT_VERSION", value = var.node_version },
             { name = "WEBSITE_AUTH_AAD_ALLOWED_TENANTS", value = var.tenant_id },
-
-            # OpenTelemetry settings
-            { name = "OTEL_SERVICE_NAME", value = "logic-app-mcp" },
           ],
+          var.app_settings
         )
       }
     }
@@ -117,34 +119,24 @@ resource "azurerm_role_assignment" "uai_storage_queue_data_contributor" {
 }
 
 
-resource "azapi_update_resource" "logicapp_auth" {
-  type        = "Microsoft.Web/sites/config@2023-12-01"
-  resource_id = "${azapi_resource.logicapp.id}/config/authsettingsV2"
-
-  body = {
+locals {
+  logicapp_auth_body = jsonencode({
     properties = {
       clearInboundClaimsMapping = "false"
       platform = {
         enabled        = true
         runtimeVersion = "~1"
       }
-
       globalValidation = {
         requireAuthentication       = true
         unauthenticatedClientAction = "Return403"
         excludedPaths               = []
       }
-
       httpSettings = {
         requireHttps = true
-        forwardProxy = {
-          convention = "NoProxy"
-        }
-        routes = {
-          apiPrefix = "/.auth"
-        }
+        forwardProxy = { convention = "NoProxy" }
+        routes       = { apiPrefix = "/.auth" }
       }
-
       identityProviders = {
         azureActiveDirectory = {
           enabled = true
@@ -159,21 +151,16 @@ resource "azapi_update_resource" "logicapp_auth" {
             ]
           }
           validation = {
-            allowedAudiences = [
-              "api://${var.azuread_application_entra_app_client_id}/"
-            ]
-            defaultAuthorizationPolicy = {
-              allowedPrincipals = {
-                identities = [var.apim_principal_id]
-              }
-            }
-            jwtClaimChecks = {}
+            allowedAudiences           = ["api://${var.azuread_application_entra_app_client_id}/"]
+            defaultAuthorizationPolicy = {}
+            jwtClaimChecks             = {}
           }
         }
       }
-
       login = {
-        allowedExternalRedirectUrls = []
+        allowedExternalRedirectUrls   = []
+        preserveUrlFragmentsForLogins = false
+        routes                        = {}
         cookieExpiration = {
           convention       = "FixedTime"
           timeToExpiration = "08:00:00"
@@ -182,8 +169,6 @@ resource "azapi_update_resource" "logicapp_auth" {
           nonceExpirationInterval = "00:05:00"
           validateNonce           = true
         }
-        preserveUrlFragmentsForLogins = false
-        routes                        = {}
         tokenStore = {
           azureBlobStorage           = {}
           enabled                    = false
@@ -192,6 +177,25 @@ resource "azapi_update_resource" "logicapp_auth" {
         }
       }
     }
+  })
+}
+
+# additional_allowed_principal_ids の変更を triggers で検知し az rest で authsettingsV2 を PUT する
+resource "null_resource" "logicapp_auth" {
+  triggers = {
+    body_hash = sha256(local.logicapp_auth_body)
   }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOT
+      az rest \
+        --method PUT \
+        --url "https://management.azure.com${azapi_resource.logicapp.id}/config/authsettingsV2?api-version=2023-12-01" \
+        --body '${local.logicapp_auth_body}'
+    EOT
+  }
+
+  depends_on = [azapi_resource.logicapp]
 }
 

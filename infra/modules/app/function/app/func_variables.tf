@@ -9,11 +9,6 @@ variable "tenant_id" {
   description = "Azure AD Tenant ID"
 }
 
-variable "apim_principal_id" {
-  type        = string
-  description = "Principal ID of APIM Managed Identity (for allowedPrincipals)"
-}
-
 # Additional variable for Function App azapi_resource
 variable "identity_id" {
   type        = string
@@ -114,6 +109,7 @@ variable "primary_blob_endpoint" {
 #    error_message = "Allowed values for identity_type are: 'SystemAssigned, UserAssigned', UserAssigned"
 #  }
 #}
+
 
 
 variable "application_insights_connection_string" {

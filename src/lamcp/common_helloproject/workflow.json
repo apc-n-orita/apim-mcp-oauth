@@ -3,18 +3,90 @@
     "$schema": "https://schema.management.azure.com/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0",
     "actions": {
-      "Response": {
-        "type": "Response",
+      "Parse_Client_Principal": {
+        "type": "ParseJson",
+        "runtimeConfiguration": {
+          "secureData": {
+            "properties": ["inputs"]
+          }
+        },
         "inputs": {
-          "statusCode": 200,
-          "body": "@triggerBody()?['message']"
+          "content": "@base64ToString(triggerOutputs()['headers']?['x-ms-client-principal'])",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "claims": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "typ": { "type": "string" },
+                    "val": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
         },
         "runAfter": {}
+      },
+      "Filter_Mcp_Invoke_Role": {
+        "type": "Query",
+        "runtimeConfiguration": {
+          "secureData": {
+            "properties": ["inputs", "outputs"]
+          }
+        },
+        "inputs": {
+          "from": "@body('Parse_Client_Principal')?['claims']",
+          "where": "@and(equals(item()?['typ'], 'roles'), equals(item()?['val'], 'Mcp.Invoke'))"
+        },
+        "runAfter": {
+          "Parse_Client_Principal": ["Succeeded"]
+        }
+      },
+      "Check_Mcp_Invoke_Role": {
+        "type": "If",
+        "expression": {
+          "and": [
+            { "greater": ["@length(body('Filter_Mcp_Invoke_Role'))", 0] }
+          ]
+        },
+        "actions": {
+          "Response": {
+            "type": "Response",
+            "inputs": {
+              "statusCode": 200,
+              "body": "@triggerBody()?['message']"
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {
+            "Response_Forbidden": {
+              "type": "Response",
+              "inputs": {
+                "statusCode": 403,
+                "body": "Forbidden: Mcp.Invoke role required"
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {
+          "Filter_Mcp_Invoke_Role": ["Succeeded"]
+        }
       }
     },
     "triggers": {
       "Request": {
         "type": "Request",
+        "runtimeConfiguration": {
+          "secureData": {
+            "properties": ["outputs"]
+          }
+        },
         "description": "This example shows a simple \"Hello World\" operation for common project.\nThe application returns the user's message exactly as received, acting as a basic echo to verify that the project is running correctly.",
         "kind": "Http",
         "inputs": {

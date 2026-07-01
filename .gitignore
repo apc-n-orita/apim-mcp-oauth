@@ -40,5 +40,4 @@ override.tf.json
 terraform.rc
 .azure/
 .vscode/*
-!.vscode/mcp.json
 settings.local.json
