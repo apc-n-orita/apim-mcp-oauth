@@ -5,6 +5,7 @@
 |------|---------|
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~>2.0.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.60.0 |
+| <a name="requirement_null"></a> [null](#requirement\_null) | ~>3.0 |
 
 ## Providers
 
@@ -12,19 +13,20 @@
 |------|---------|
 | <a name="provider_azapi"></a> [azapi](#provider\_azapi) | ~>2.0.0 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | ~>4.60.0 |
+| <a name="provider_null"></a> [null](#provider\_null) | ~>3.0 |
 
 ## Resources
 
 | Name | Type |
 |------|------|
 | [azapi_resource.logicapp](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) | resource |
-| [azapi_update_resource.logicapp_auth](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/update_resource) | resource |
 | [azurerm_role_assignment.uai_storage_account_contributor](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [azurerm_role_assignment.uai_storage_blob_data_owner](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [azurerm_role_assignment.uai_storage_queue_data_contributor](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [azurerm_role_assignment.uai_storage_table_data_contributor](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment) | resource |
 | [azurerm_service_plan.logicapp_plan](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/service_plan) | resource |
 | [azurerm_storage_share.logicapp_share](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_share) | resource |
+| [null_resource.logicapp_auth](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 
 ## Inputs
 
@@ -45,6 +47,7 @@
 | <a name="input_user_assigned_identity_client_id"></a> [user\_assigned\_identity\_client\_id](#input\_user\_assigned\_identity\_client\_id) | The Client ID of the User-Assigned Managed Identity | `string` | n/a | yes |
 | <a name="input_user_assigned_identity_id"></a> [user\_assigned\_identity\_id](#input\_user\_assigned\_identity\_id) | The resource ID of the User-Assigned Managed Identity | `string` | n/a | yes |
 | <a name="input_user_assigned_identity_principal_id"></a> [user\_assigned\_identity\_principal\_id](#input\_user\_assigned\_identity\_principal\_id) | The Principal ID of the User-Assigned Managed Identity | `string` | n/a | yes |
+| <a name="input_app_settings"></a> [app\_settings](#input\_app\_settings) | Additional app settings as a list of name/value pairs | <pre>list(object({<br/>    name  = string<br/>    value = string<br/>  }))</pre> | `[]` | no |
 | <a name="input_extension_bundle_version"></a> [extension\_bundle\_version](#input\_extension\_bundle\_version) | The Logic Apps Extension Bundle version range | `string` | `"[1.*, 2.0.0)"` | no |
 | <a name="input_functions_extension_version"></a> [functions\_extension\_version](#input\_functions\_extension\_version) | The Azure Functions extension version | `string` | `"~4"` | no |
 | <a name="input_node_version"></a> [node\_version](#input\_node\_version) | The Node.js runtime version | `string` | `"~18"` | no |
