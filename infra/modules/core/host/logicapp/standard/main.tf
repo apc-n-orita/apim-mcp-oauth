@@ -151,14 +151,14 @@ locals {
             ]
           }
           validation = {
-            allowedAudiences = ["api://${var.azuread_application_entra_app_client_id}/"]
+            allowedAudiences           = ["api://${var.azuread_application_entra_app_client_id}/"]
             defaultAuthorizationPolicy = {}
             jwtClaimChecks             = {}
           }
         }
       }
       login = {
-        allowedExternalRedirectUrls = []
+        allowedExternalRedirectUrls   = []
         preserveUrlFragmentsForLogins = false
         routes                        = {}
         cookieExpiration = {
