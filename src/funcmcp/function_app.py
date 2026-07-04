@@ -20,6 +20,8 @@ _connection_string = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING")
 if _connection_string:
     configure_azure_monitor(connection_string=_connection_string)
     logging.info("Azure Monitor OpenTelemetry configured.")
+    # Suppress verbose INFO logs from the exporter's own HTTP requests.
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 else:
     logging.warning("APPLICATIONINSIGHTS_CONNECTION_STRING not set. Tracing disabled.")
 

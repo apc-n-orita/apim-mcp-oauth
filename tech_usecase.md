@@ -98,6 +98,22 @@ When a request arrives at APIM with a user token:
 
 The backend only ever sees the MSI token — never the end-user's token.
 
+#### Preventing Token Leakage in Logs
+
+Tokens are kept out of telemetry (Application Insights) and run history by design, on both backends.
+
+**Function App**
+
+- `_check_mcp_invoke_role` never logs the `x-ms-client-principal` header or the decoded claims. Only a fixed message plus a failure reason code (`header_missing` / `role_not_found` / `decode_error`) is emitted, and on decode errors only the exception type name is recorded — not `str(e)`, which could embed fragments of the Base64 payload.
+- The Azure SDK's own HTTP logging (`azure.core.pipeline.policies.http_logging_policy`), which the Azure Monitor OpenTelemetry exporter uses to report its ingestion requests, is raised to `WARNING` in `function_app.py`. These logs already mask the header value as `'Authorization': 'REDACTED'`, but suppressing them also removes the noise entirely. Application loggers are unaffected.
+
+**Logic App**
+
+- Every workflow enables **Secure Inputs / Secure Outputs** (`runtimeConfiguration.secureData`) so that token material never appears in run history:
+  - `Request` trigger — inputs and outputs secured: incoming headers (`Authorization`, `x-ms-client-principal`) are hidden.
+  - `Parse_Client_Principal` — inputs secured: the decoded claims JSON is hidden.
+  - `Filter_Mcp_Invoke_Role` — inputs and outputs secured: the claims array being filtered is hidden.
+
 #### PIM (Privileged Identity Management) for JIT Access in Production
 
 **Current hands-on setup**: The user who runs `azd up` is assigned directly as an **active member** of the ops group. Active membership is permanent until explicitly removed.
@@ -304,7 +320,7 @@ Enables centralized authentication and authorization management for enterprise-s
 >
 > [Harness engineering](https://www.humanlayer.dev/blog/skill-issue-harness-engineering-for-coding-agents) treats the agent's runtime environment — system prompts, skill definitions, and hooks — as a behavioral governance layer that controls _how_ the agent acts, independent of which tools are available. Key controls:
 >
-> - **copilot-instructions.md /CLAUDE.md / AGENTS.md**: Standing instructions injected into every agent session. Explicitly define allowed operations, forbidden actions (e.g., "never delete branches in production repos"), and required escalation paths for high-risk operations.
+> - **copilot-instructions.md / CLAUDE.md / AGENTS.md**: Standing instructions injected into every agent session. Explicitly define allowed operations, forbidden actions (e.g., "never delete branches in production repos"), and required escalation paths for high-risk operations.
 > - **Agent Skills (SKILL.md)**: Markdown files with YAML frontmatter that restrict auto-invocation (`disable-model-invocation: true`), scope allowed tools (`allowed-tools`), and activate on specific conditions. See the [Agent Skills open standard](https://agentskills.io).
 > - **Hooks**: Deterministic shell commands that approve or deny tool calls based on input patterns. Unlike prompt-based instructions (which are probabilistic), hooks provide hard enforcement at the tool-call boundary.
 
