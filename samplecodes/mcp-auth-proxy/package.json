@@ -1,0 +1,13 @@
+{
+  "name": "mcp-auth-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure AD token を自動更新してMCPリクエストに付与するローカルリバースプロキシ (Codex/Gemini/Claude Code等で共用可能)",
+  "main": "proxy.js",
+  "scripts": {
+    "start": "node proxy.js"
+  },
+  "dependencies": {
+    "http-proxy": "^1.18.1"
+  }
+}
