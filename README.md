@@ -314,7 +314,7 @@ The `headersHelper` field in `.mcp.json` calls `az account get-access-token` at 
 > Claude Code natively supports OAuth authorization via Dynamic Client Registration (DCR). However, Entra ID does not support DCR. Static client registration is an alternative, but it requires distributing a client secret to each user, which poses a security risk. As a practical workaround, Claude Code can be configured to acquire a token via the Azure CLI (`az login`) using `headersHelper` instead.
 >
 > **Access token expiry and reconnection**  
-> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token.
+> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token. To avoid this restart entirely (and for MCP clients without `headersHelper`), see [Other MCP Clients (Codex CLI, Gemini CLI, etc.)](#other-mcp-clients-codex-cli-gemini-cli-etc) below.
 >
 > **Why pre-authorizing Azure CLI is safe**  
 > The `headersHelper` command acquires a token scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`) using the Azure CLI client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). This is the same pattern Microsoft uses for its own first-party services (e.g., `https://ai.azure.com`) — they are pre-authorized against Entra ID and obtain tokens via Azure CLI in the same way. Additionally, the OAuth app registered here is single-tenant, so only users who can sign in to this specific tenant can obtain a token. The Terraform resource that enables this is:
@@ -363,6 +363,17 @@ Prompt the following and confirm that execution is rejected due to lack of permi
 ```
 Use func-hello-mcp to say hello to project2
 ```
+
+#### Other MCP Clients (Codex CLI, Gemini CLI, etc.)
+
+Codex CLI and Gemini CLI can connect to the same APIM-protected MCP servers, but their HTTP-type MCP server configuration only supports a static bearer token read once from an environment variable at startup — unlike Claude Code's `headersHelper`, they have no built-in way to re-run a command such as `az account get-access-token` per request or on reconnect. Since Azure AD access tokens expire after 1 hour, a long-running session with these clients will eventually fail with `401 Unauthorized` until the client is restarted.
+
+[`samplecodes/mcp-auth-proxy/proxy.js`](./samplecodes/mcp-auth-proxy/proxy.js) provides a small local HTTP reverse proxy that bridges this gap:
+
+- Acquires an Azure AD access token via `az account get-access-token`, caching it until shortly before expiry
+- Injects a fresh `Authorization: Bearer <token>` header into every request it forwards to APIM
+
+Point the MCP client's server URL at the proxy (e.g. `http://127.0.0.1:8787/<mcp-backend-path>`) instead of the APIM endpoint directly. The token then stays valid for as long as the proxy process runs, so no client restart is needed when the 1-hour token expires. See the header comment in `proxy.js` for setup steps and configuration examples for Claude Code, Codex CLI, and Gemini CLI.
 
 ### VS Code (GitHub Copilot Chat / CLI) → APIM → MCP
 
