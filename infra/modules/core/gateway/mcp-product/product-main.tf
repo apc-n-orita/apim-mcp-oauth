@@ -22,8 +22,7 @@ resource "azurerm_api_management_product" "product" {
   display_name          = var.product_name
   description           = "Product for ${var.product_name}"
   subscription_required = false
-  approval_required     = false
-  published             = true
+  published             = false
 }
 
 
