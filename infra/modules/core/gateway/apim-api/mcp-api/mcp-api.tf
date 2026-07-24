@@ -52,7 +52,7 @@ resource "azapi_resource" "mcp_api" {
       }
       backendId   = azurerm_api_management_backend.mcp.name
       serviceUrl  = null
-      description = null
+      description = var.api_description
       subscriptionKeyParameterNames = {
         header = "Ocp-Apim-Subscription-Key"
         query  = "subscription-key"

@@ -18,6 +18,12 @@ variable "api_name" {
   type        = string
 }
 
+variable "api_description" {
+  description = "Description of the MCP API"
+  type        = string
+  default     = null
+}
+
 variable "mcp_url" {
   description = "Endpoint URL of mcp"
   type        = string
