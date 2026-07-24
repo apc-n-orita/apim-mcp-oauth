@@ -33,6 +33,7 @@
 | <a name="input_mcp_api_uri_template"></a> [mcp\_api\_uri\_template](#input\_mcp\_api\_uri\_template) | URI template for MCP API | `string` | n/a | yes |
 | <a name="input_mcp_url"></a> [mcp\_url](#input\_mcp\_url) | Endpoint URL of mcp | `string` | n/a | yes |
 | <a name="input_resource_group_name"></a> [resource\_group\_name](#input\_resource\_group\_name) | Resource group name | `string` | n/a | yes |
+| <a name="input_api_description"></a> [api\_description](#input\_api\_description) | Description of the MCP API | `string` | `null` | no |
 | <a name="input_sampling_percentage"></a> [sampling\_percentage](#input\_sampling\_percentage) | Percentage of requests to log to Application Insights (0.0 to 100.0) | `number` | `100` | no |
 
 ## Outputs
