@@ -427,6 +427,7 @@ module "la_mcp" {
 module "func_mcp_api" {
   source                   = "./modules/core/gateway/apim-api/mcp-api"
   api_name                 = module.func_mcp.name
+  api_description          = "Hello MCP server hosted on Azure Functions"
   resource_group_name      = azurerm_resource_group.rg.name
   apim_service_name        = module.apim.APIM_SERVICE_NAME
   mcp_url                  = module.func_mcp.uri
@@ -440,6 +441,7 @@ module "func_mcp_api" {
 module "la_mcp_api" {
   source                   = "./modules/core/gateway/apim-api/mcp-api"
   api_name                 = module.la_mcp.logicapp_name
+  api_description          = "Hello MCP server hosted on Azure Logic Apps"
   resource_group_name      = azurerm_resource_group.rg.name
   apim_service_name        = module.apim.APIM_SERVICE_NAME
   mcp_url                  = "https://${module.la_mcp.logicapp_default_hostname}"
