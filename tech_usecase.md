@@ -210,88 +210,49 @@ The requested tool is then compared with the access token's `roles` claim using 
 
 If no rule matches, APIM returns `403 Forbidden`.
 
+#### Duplicate JSON Keys: A Potential Authorization Bypass
+
+**Background.** Neither JSON (RFC 8259), JSON-RPC 2.0, nor the MCP specification defines how a parser must resolve duplicate keys in an object (e.g., two `method` properties, or `params` appearing twice). RFC 8259 only says names *should* be unique — behavior on violation is implementation-defined. This means each component in the request path (the gateway and the backend) is free to pick its own resolution order (first-wins, last-wins, or error), independently of the others.
+
+**Why this matters here.** The authorization logic above reads `method` and `params.name` from the request body to decide whether to allow a `tools/call`. `authentication-managed-identity` then forwards the *original, unmodified* request body to the backend. If the body contains a duplicate key and the backend's JSON parser resolves it differently than APIM did, the method or tool name APIM authorized against can differ from the one the backend actually executes — the same class of inconsistency that HTTP request smuggling exploits between a front-end proxy and a back-end server, applied to JSON parsing instead of HTTP framing.
+
+Example shape of the attack (illustrative, not verbatim):
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"tools/list","method":"tools/call","params":{"name":"restricted_tool"}}
+```
+
+If APIM resolves `method` to `tools/list` (skipping the tool-authorization branch entirely) while the backend resolves it to `tools/call`, an unauthorized tool invocation could slip through without ever hitting the `403` branch.
+
+**Verified behavior.** We tested this against both backends (Azure Functions MCP extension and Logic Apps Standard MCP), duplicating the key at three different levels — the top-level `method`, the entire `params` object, and just the `name` field inside a single `params` object — and reversing the order in each case. Result: **APIM (Newtonsoft.Json) and both backends consistently resolve duplicate keys last-wins** at every level tested. (Full request/response matrix omitted here; this reflects observed behavior of the specific library versions in this deployment, not a spec guarantee.)
+
+Because this agreement is incidental — an artifact of the specific parser versions involved, not something the spec requires — it isn't safe to rely on indefinitely. A future dependency update or a language/runtime change on the backend could silently reintroduce the bypass.
+
+**Mitigation: normalize before forwarding.** Rather than depend on the backend agreeing with APIM's interpretation, the policy re-serializes the already-parsed, already-authorized `JObject` and forwards *that* instead of the raw request bytes. This makes the forwarded body single-valued at the point it left APIM, so there is nothing left for the backend to resolve differently:
+
+```xml
+<!-- After the tools/call authorization choose block, before authentication-managed-identity -->
+<set-body>@(((JObject)context.Variables["mcpBody"]).ToString())</set-body>
+```
+
+This closes the gap regardless of what parser or resolution order the backend uses, and regardless of whether the duplicate appears in `method`, `params`, or a nested field like `params.name`.
+
 #### Backend Protection with Managed Identity
 
 `authentication-managed-identity` overwrites the Authorization header with APIM's Managed Identity token before forwarding to the backend MCP (Logic Apps/Functions). The backend enforces authorization via Easy Auth + `Mcp.Invoke` App Role check, so only callers with that role (APIM MSI or ops group members) can reach it — see [Backend MCP Authorization Architecture](#backend-mcp-authorization-architecture) for details.
 
 ```xml
-<!--
-    - Policies are applied in the order they appear.
-    - Place <base/> inside a section to inherit policies from the outer scope.
-    - Comments inside policies are not preserved.
--->
-<!-- Add policies as children of <inbound>, <outbound>, <backend>, and <on-error> -->
-<policies>
-    <!-- Throttle, authorize, validate, cache, or transform incoming requests -->
-    <inbound>
-        <base />
-        <validate-azure-ad-token tenant-id="{{EntraIDTenantId}}" header-name="Authorization" output-token-variable-name="jwt" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid">
-            <audiences>
-                <audience>api://{{oauth-app-id}}/</audience>
-            </audiences>
-        </validate-azure-ad-token>
-        <!-- Parse JSON body -->
-        <set-variable name="mcpBody" value="@(
-            context.Request.Body.As<JObject>(preserveContent: true)
-        )" />
-        <set-variable name="mcpMethod" value="@{
-            var body = (JObject)context.Variables["mcpBody"];
-            return (string)body?["method"] ?? string.Empty;
-        }" />
-        <choose>
-            <!-- Authenticate only tool calls -->
-            <when condition="@((context.Variables.GetValueOrDefault<string>("mcpMethod") ?? "").Equals("tools/call", StringComparison.OrdinalIgnoreCase))">
-                <set-variable name="mcpToolName" value="@{
-                    var body = context.Request.Body.As<JObject>(preserveContent: true);
-                    return (string)body["params"]?["name"] ?? "";
-                }" />
-                <set-variable name="isAuthorized" value="@{
-                    var jwt = (Jwt)context.Variables["jwt"];
-                    if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
-                    var toolName = (string)context.Variables["mcpToolName"];
-                    if (string.IsNullOrEmpty(toolName)) { return false; }
-
-                    return jwt.Claims["roles"].Any(role =>
-                        role.Equals(toolName, StringComparison.OrdinalIgnoreCase) ||
-                        (role.EndsWith("*") && toolName.StartsWith(role.Substring(0, role.Length - 1), StringComparison.OrdinalIgnoreCase))
-                    );
-                }" />
-                <choose>
-                    <when condition="@((bool)context.Variables["isAuthorized"])">
-                        <!-- Authorized, pass through -->
-                    </when>
-                    <otherwise>
-                        <return-response>
-                            <set-status code="403" reason="Forbidden" />
-                            <set-body>@("{\"error\":\"Role missing or invalid\"}")</set-body>
-                        </return-response>
-                    </otherwise>
-                </choose>
-            </when>
-        </choose>
-        <!-- Acquire token using Managed Identity -->
-        <authentication-managed-identity resource="{{oauth-app-id}}" output-token-variable-name="msi-access-token" ignore-error="false" />
-        <!-- Override Authorization header with MSI token -->
-        <set-header name="Authorization" exists-action="override">
-            <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
-        </set-header>
-        <!-- Remove subscription key header -->
-        <set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
-    </inbound>
-    <!-- Control how requests are forwarded to backend services -->
-    <backend>
-        <base />
-    </backend>
-    <!-- Customize outbound responses -->
-    <outbound>
-        <base />
-    </outbound>
-    <!-- Handle exceptions and customize error responses -->
-    <on-error>
-        <base />
-    </on-error>
-</policies>
+<!-- Acquire token using Managed Identity -->
+<authentication-managed-identity resource="{{oauth-app-id}}" output-token-variable-name="msi-access-token" ignore-error="false" />
+<!-- Override Authorization header with MSI token -->
+<set-header name="Authorization" exists-action="override">
+    <value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>
+</set-header>
+<!-- Remove subscription key header -->
+<set-header name="Ocp-Apim-Subscription-Key" exists-action="delete" />
 ```
+
+See [`mcp_api_policy.xml`](infra/modules/core/gateway/mcp-product/files/policy/mcp_api_policy.xml) for the full policy.
 
 ### OAuth App (Entra ID App Registration and Role Configuration)
 

@@ -13,21 +13,15 @@
 				<audience>api://{{${oauth-app-id}}}/</audience>
 			</audiences>
 		</validate-azure-ad-token>
-		<!-- Parse JSON body -->
+		<!-- Parse JSON body once -->
 		<set-variable name="mcpBody" value="@(
 			context.Request.Body.As<JObject>(preserveContent: true)
 		)" />
-		<set-variable name="mcpMethod" value="@{
-			var body = (JObject)context.Variables["mcpBody"];
-			return (string)body?["method"] ?? string.Empty;
-		}" />
+		<set-variable name="mcpMethod" value="@((string)context.Variables.GetValueOrDefault<JObject>("mcpBody", new JObject())["method"] ?? "")" />
 		<choose>
 			<!-- Authenticate only tool calls -->
 			<when condition="@((context.Variables.GetValueOrDefault<string>("mcpMethod") ?? "").Equals("tools/call", StringComparison.OrdinalIgnoreCase))">
-				<set-variable name="mcpToolName" value="@{
-					var body = context.Request.Body.As<JObject>(preserveContent: true);
-					return (string)body["params"]?["name"] ?? "";
-				}" />
+				<set-variable name="mcpToolName" value="@((string)context.Variables.GetValueOrDefault<JObject>("mcpBody", new JObject())["params"]?["name"] ?? "")" />
 				<set-variable name="isAuthorized" value="@{
 					var jwt = (Jwt)context.Variables["jwt"];
 					if (jwt == null || !jwt.Claims.ContainsKey("roles")) { return false; }
@@ -51,6 +45,19 @@
 				</choose>
 			</when>
 		</choose>
+		<!-- Normalize the request body to what APIM actually parsed and authorized against.
+		     Without this, a body with duplicate keys (e.g. two "method" properties, or a
+		     duplicated "params" object) is forwarded byte-for-byte as received. If the
+		     backend's JSON parser resolves the duplicate differently than APIM did (e.g.
+		     first-wins vs. last-wins), the method or tool name it acts on can differ from
+		     the one APIM authorized against, letting an unauthorized call slip through. -->
+		<set-body>@(((JObject)context.Variables["mcpBody"]).ToString())</set-body>
+		<!-- Debug: emit the normalized body actually forwarded to the backend
+		<trace source="mcp-audit" severity="information">
+			<message>@(((JObject)context.Variables["mcpBody"]).ToString())</message>
+			<metadata name="mcpMethod" value="@(context.Variables.GetValueOrDefault<string>("mcpMethod", ""))" />
+		</trace>
+		-->
 		<!-- Acquire token using Managed Identity -->
 		<authentication-managed-identity resource="{{${oauth-app-id}}}" output-token-variable-name="msi-access-token" ignore-error="false" />
 		<!-- Override Authorization header with MSI token -->
