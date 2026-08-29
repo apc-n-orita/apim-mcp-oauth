@@ -6,12 +6,12 @@
 
 #### Overview
 
-Backend MCP (Azure Functions and Logic Apps) enforces authorization at two independent layers, so that even if one layer is misconfigured, the other still blocks unauthorized access.
+Backend MCP (Logic Apps) enforces authorization at two independent layers, so that even if one layer is misconfigured, the other still blocks unauthorized access.
 
 | Layer | Mechanism | Enforced by |
 |---|---|---|
 | Transport | Easy Auth (Entra ID token validation) | Azure App Service platform |
-| Application | `Mcp.Invoke` App Role check | Function App code / Logic App workflow |
+| Application | `Mcp.Invoke` App Role check | Logic App workflow |
 
 #### Who Can Access the Backend Directly
 
@@ -23,40 +23,6 @@ Only the following two identities hold the `Mcp.Invoke` App Role and can reach t
 | Ops Entra ID group members | App Role assignment to the ops security group | Troubleshooting, integration testing |
 
 Normal end-users go through APIM. APIM validates the user token (including per-tool role claims), then replaces it with the APIM MSI token before forwarding to the backend. The backend never sees the user's original token.
-
-#### Function App: Authorization Implementation
-
-**Easy Auth** (`webhookAuthorizationLevel: "Anonymous"` in `host.json`)
-
-```json
-"extensions": {
-  "mcp": {
-    "system": {
-      "webhookAuthorizationLevel": "Anonymous"
-    }
-  }
-}
-```
-
-Setting `webhookAuthorizationLevel` to `"Anonymous"` disables the MCP extension system key. Easy Auth (configured separately on the App Service) becomes the sole transport-layer guard — it validates the Entra ID bearer token and injects `x-ms-client-principal` (Base64-encoded claims JSON) into request headers.
-
-**Application-level `Mcp.Invoke` check** (`function_app.py`)
-
-The function code decodes `x-ms-client-principal` and checks for `{"typ": "roles", "val": "Mcp.Invoke"}` in the claims array. If the claim is absent, the tool returns `"Forbidden: Mcp.Invoke role required"` without raising an exception (which would generate unnecessary Application Insights stack traces).
-
-```python
-def _check_mcp_invoke_role(principal_header: str) -> bool:
-    # Decodes x-ms-client-principal injected by Easy Auth.
-    # Logs only the failure reason (header_missing / role_not_found / decode_error),
-    # never the token content itself.
-    ...
-
-def _run_mcp_tool(tool_name: str, message: str, ctx: func.MCPToolContext) -> str:
-    if not _check_mcp_invoke_role(_get_mcp_headers(ctx).get("x-ms-client-principal", "")):
-        _logger.warning("Access denied.", extra={"tool": tool_name})
-        return "Forbidden: Mcp.Invoke role required"
-    return _echo_tool(tool_name, message)
-```
 
 #### Logic App: Authorization Implementation
 
@@ -102,11 +68,6 @@ The backend only ever sees the MSI token — never the end-user's token.
 
 Tokens are kept out of telemetry (Application Insights) and run history by design, on both backends.
 
-**Function App**
-
-- `_check_mcp_invoke_role` never logs the `x-ms-client-principal` header or the decoded claims. Only a fixed message plus a failure reason code (`header_missing` / `role_not_found` / `decode_error`) is emitted, and on decode errors only the exception type name is recorded — not `str(e)`, which could embed fragments of the Base64 payload.
-- The Azure SDK's own HTTP logging (`azure.core.pipeline.policies.http_logging_policy`), which the Azure Monitor OpenTelemetry exporter uses to report its ingestion requests, is raised to `WARNING` in `function_app.py`. These logs already mask the header value as `'Authorization': 'REDACTED'`, but suppressing them also removes the noise entirely. Application loggers are unaffected.
-
 **Logic App**
 
 - Every workflow enables **Secure Inputs / Secure Outputs** (`runtimeConfiguration.secureData`) so that token material never appears in run history:
@@ -146,16 +107,18 @@ Tokens are kept out of telemetry (Application Insights) and run history by desig
 
 When VS Code (GitHub Copilot extension) accesses the MCP endpoint (`/mcp`), APIM returns a 401 response because authentication is required. At this point, the client automatically sends a GET request to APIM's `/.well-known/oauth-protected-resource` endpoint to retrieve OAuth metadata.
 
-In APIM, by configuring the following policy, you can return information about the OAuth authorization server (Entra ID) in JSON format. This metadata includes the resource URL, authorization server endpoint, supported authentication methods, and scopes.
+The shared `.well-known/oauth-protected-resource` API is just an empty path shell (see the `oauth-api` Terraform module). Each MCP backend attaches its own GET/OPTIONS operation underneath it via the `mcp-prm-operation` module, so the JSON returned — resource URL, authorization server endpoint, supported authentication methods, and scope — reflects that specific backend rather than a single fixed value shared by every MCP server.
 
-In addition, an `OPTIONS /.well-known/oauth-protected-resource` operation policy returns CORS preflight headers so browser-based clients can retrieve this metadata safely.
+An `OPTIONS /.well-known/oauth-protected-resource` operation policy (added by the same module) returns CORS preflight headers so browser-based clients can retrieve this metadata safely.
 
-VS Code uses this metadata to access the authorization server (e.g., `https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0`) and obtain an access token with the `api://{{oauth-app-id}}/user_impersonation` scope.
+VS Code uses this metadata to access the authorization server (e.g., `https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0`) and obtain an access token with the scope this backend advertises (e.g., `api://<oauth-app-id>/user_impersonation` for the Logic App MCP backend).
 
 ```xml
 <policies>
     <inbound>
-        <!-- Return OAuth metadata as JSON -->
+        <base />
+        <!-- Return the OAuth 2.0 Protected Resource Metadata (RFC 9728) in JSON format,
+             scoped to this MCP server's own path/scope -->
         <return-response>
             <set-status code="200" reason="OK" />
             <set-header name="Content-Type" exists-action="override">
@@ -164,16 +127,18 @@ VS Code uses this metadata to access the authorization server (e.g., `https://lo
             <set-header name="access-control-allow-origin" exists-action="override">
                 <value>*</value>
             </set-header>
+            <set-header name="Cache-Control" exists-action="override">
+                <value>public, max-age=3600</value>
+            </set-header>
             <set-body>@{
                 return new JObject(
-                    new JProperty("resource", "{{APIMGatewayURL}}/"),
+                    new JProperty("resource", "${apim_gateway_url}/${mcp_endpoint_path}${mcp_endpoint_query}"),
                     new JProperty("authorization_servers", new JArray("https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0")),
                     new JProperty("bearer_methods_supported", new JArray("header")),
-                    new JProperty("scopes_supported", new JArray("api://{{oauth-app-id}}/user_impersonation"))
+                    new JProperty("scopes_supported", new JArray("${scope}"))
                 ).ToString();
             }</set-body>
         </return-response>
-        <base />
     </inbound>
     <backend>
         <base />
@@ -186,6 +151,8 @@ VS Code uses this metadata to access the authorization server (e.g., `https://lo
     </on-error>
 </policies>
 ```
+
+`apim_gateway_url`, `mcp_endpoint_path`, `mcp_endpoint_query`, and `scope` are Terraform `templatefile()` variables substituted per backend at apply time — e.g. for the Logic App MCP backend, `mcp_endpoint_path` resolves to its API name plus `/api/mcpservers/projects/mcp`, and `scope` to `api://<oauth-app-id>/user_impersonation`. `{{EntraIDTenantId}}` remains an APIM named value (shared across all backends) rather than a Terraform variable. See [`mcp_prm_get_policy.xml`](infra/modules/core/gateway/apim-api/mcp-prm-operation/files/policy/mcp_prm_get_policy.xml) for the full policy.
 
 #### Overview of OAuth Token Validation Policy
 
@@ -224,7 +191,7 @@ Example shape of the attack (illustrative, not verbatim):
 
 If APIM resolves `method` to `tools/list` (skipping the tool-authorization branch entirely) while the backend resolves it to `tools/call`, an unauthorized tool invocation could slip through without ever hitting the `403` branch.
 
-**Verified behavior.** We tested this against both backends (Azure Functions MCP extension and Logic Apps Standard MCP), duplicating the key at three different levels — the top-level `method`, the entire `params` object, and just the `name` field inside a single `params` object — and reversing the order in each case. Result: **APIM (Newtonsoft.Json) and both backends consistently resolve duplicate keys last-wins** at every level tested. (Full request/response matrix omitted here; this reflects observed behavior of the specific library versions in this deployment, not a spec guarantee.)
+**Verified behavior.** We tested this against the backend (Logic Apps Standard MCP; an earlier revision of this environment also deployed an Azure Functions MCP backend, since removed, which showed the same behavior), duplicating the key at three different levels — the top-level `method`, the entire `params` object, and just the `name` field inside a single `params` object — and reversing the order in each case. Result: **APIM (Newtonsoft.Json) and the backend consistently resolve duplicate keys last-wins** at every level tested. (Full request/response matrix omitted here; this reflects observed behavior of the specific library versions in this deployment, not a spec guarantee.)
 
 Because this agreement is incidental — an artifact of the specific parser versions involved, not something the spec requires — it isn't safe to rely on indefinitely. A future dependency update or a language/runtime change on the backend could silently reintroduce the bypass.
 
