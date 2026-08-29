@@ -9,10 +9,6 @@ name: apim-mcp-oauth
 metadata:
   template: apim-mcp-oauth@1.0.0
 services:
-  funcmcp:
-    project: ./src/funcmcp/
-    language: python
-    host: function
   lamcp:
     project: ./src/lamcp/
     language: js

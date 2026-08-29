@@ -15,10 +15,6 @@ output "RESOURCE_GROUP_NAME" {
   value = azurerm_resource_group.rg.name
 }
 
-output "FUNC_MCP_ENDPOINTS" {
-  value = "${module.apim.gateway_url}/${module.func_mcp_api.api_name}${module.func_mcp_api.api_uri_template}"
-}
-
 output "LOGICAPP_MCP_ENDPOINTS" {
   value = "${module.apim.gateway_url}/${module.la_mcp_api.api_name}${module.la_mcp_api.api_uri_template}"
 }
