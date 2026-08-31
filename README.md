@@ -437,30 +437,13 @@ Use logic-hello-mcp to say hello to project2
 
 This repository provides a hands-on experience with end-to-end security implementation combining API Management × MCP × OAuth.
 
-### Approach to AI Security
+### A Note on Where This Sits
 
-In AI security, I believe that "strict authentication and authorization at the entry point based on zero-trust principles" is the most critical factor in preventing risks proactively.
+If you continue on to [apim-mcp-a2a-oauth](https://github.com/apc-n-orita/apim-mcp-a2a-oauth) and then [APICenter](https://github.com/apc-n-orita/APICenter), you'll be walking a three-repository arc that also traces a shape from the tarot's Major Arcana.
 
-However, security and convenience are always in a trade-off relationship. While this world is often discussed in binary terms, achieving the right balance is essential in practical operations.
+This repository already holds both the **Hierophant** and the **Hermit** — not one after the other, but side by side. OAuth2, token validation, and role-based authorization rest on official documentation and established patterns: that's the Hierophant, learning what's already agreed upon. But forcing every caller through APIM as a token broker — a managed-identity token swap paired with Easy Auth on the backend, so direct access is closed off — and using PIM for Groups to grant an ops team JIT access, are original combinations of existing building blocks, not copied whole from a single guide. And the finding that APIM and the backend can silently disagree on which of two duplicate JSON keys wins — a possible authorization bypass — was only found by testing the actual deployed backend, not by reading about it anywhere. That's the Hermit, already at work right here.
 
-![2](./assets/2.png)
-
-In this hands-on lab, we incorporated the following design considerations to balance convenience and security:
-
-- **Scope of Authorization**: Rather than blocking everything, we focused role-based authorization specifically on MCP tool invocations
-- **Integrated Authentication Flow**: Designed to leverage Microsoft account tokens from VS Code directly for MCP authorization without compromising developer experience
-
-"Where to defend at the entry point, and where to allow for user experience" — this decision is the core of practical security design.
-
-To make such design decisions, it's essential to not only acquire external knowledge (extroversion) from official documentation and other sources, but also engage deeply with yourself (introversion) to explore your own solutions. Simply seeking answers externally won't lead to optimal architecture.
-
-![3](./assets/3.png)
-
-### Final Thoughts
-
-Security should be **"a safety mechanism to prevent misuse," not "a restriction on users and developers."** The security features implemented in this hands-on lab are intended to function as such positive safety mechanisms.
-
-I hope this repository serves as a helpful resource for your security design in systems utilizing AI agents and MCP.
+The next repository carries the same mixture forward, just with the balance shifted further inward. And the one after that gathers all three back together, without mixing them, into a single undivided circle — the **World**. This repository's part in that is simply to be a solid first outline, so the later stages have something to stand on.
 
 ## References
 
