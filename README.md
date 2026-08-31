@@ -19,7 +19,7 @@ sequenceDiagram
     participant Agent as AI Agent / Claude Code
     participant Entra as Entra ID
     participant APIM as API Management
-    participant MCP as MCP Backend (Logic Apps / Azure Functions)
+    participant MCP as MCP Backend (Logic Apps)
 
     Agent->>Entra: 1) Request access token
     Entra-->>Agent: 2) Return access token
@@ -53,7 +53,7 @@ sequenceDiagram
     participant VS as VS Code (GitHub Copilot Chat / CLI)
     participant APIM as API Management
     participant ID as Entra ID
-    participant MCP as MCP Backend (Logic Apps / Azure Functions)
+    participant MCP as MCP Backend (Logic Apps)
 
     VS->>APIM: 1) Request access to /mcp
     APIM-->>VS: 2) 401 Unauthorized
@@ -129,18 +129,7 @@ Ensure the following are installed locally:
 
 ### Deployment Steps
 
-**1. Build MCP Apps UI**
-
-Build the frontend widget that Azure Functions serves as the MCP Apps UI.
-
-```bash
-cd src/funcmcp/app
-npm install
-npm run build
-cd -
-```
-
-**2. Deploy**
+**1. Deploy**
 
 ```bash
 azd up
@@ -222,7 +211,7 @@ sequenceDiagram
     participant Agent as AI Agent / Claude Code
     participant Entra as Entra ID
     participant APIM as API Management
-    participant MCP as MCP Backend (Logic Apps / Azure Functions)
+    participant MCP as MCP Backend (Logic Apps)
 
     Agent->>Entra: 1) Request access token
     Entra-->>Agent: 2) Return access token
@@ -314,7 +303,7 @@ The `headersHelper` field in `.mcp.json` calls `az account get-access-token` at 
 > Claude Code natively supports OAuth authorization via Dynamic Client Registration (DCR). However, Entra ID does not support DCR. Static client registration is an alternative, but it requires distributing a client secret to each user, which poses a security risk. As a practical workaround, Claude Code can be configured to acquire a token via the Azure CLI (`az login`) using `headersHelper` instead.
 >
 > **Access token expiry and reconnection**  
-> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token. To avoid this restart entirely (and for MCP clients without `headersHelper`), see [Other MCP Clients (Codex CLI, Gemini CLI, etc.)](#other-mcp-clients-codex-cli-gemini-cli-etc) below.
+> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token.
 >
 > **Why pre-authorizing Azure CLI is safe**  
 > The `headersHelper` command acquires a token scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`) using the Azure CLI client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). This is the same pattern Microsoft uses for its own first-party services (e.g., `https://ai.azure.com`) — they are pre-authorized against Entra ID and obtain tokens via Azure CLI in the same way. Additionally, the OAuth app registered here is single-tenant, so only users who can sign in to this specific tenant can obtain a token. The Terraform resource that enables this is:
@@ -336,14 +325,12 @@ Generate `.mcp.json` dynamically using `azd env get-value`.
 
 ```bash
 cd $(git rev-parse --show-toplevel)
-FUNC_URL="$(azd env get-value FUNC_MCP_ENDPOINTS)"
 LA_URL="$(azd env get-value LOGICAPP_MCP_ENDPOINTS)"
 OAUTH_APP_ID="$(azd env get-value OAUTH_APP_ID)"
 HELPER="TOKEN=\$(az account get-access-token --scope 'api://${OAUTH_APP_ID}/.default' --query accessToken -o tsv) && echo \"{\\\"Authorization\\\": \\\"Bearer \$TOKEN\\\"}\""
-jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" --arg helper "$HELPER" \
+jq -n --arg la_url "$LA_URL" --arg helper "$HELPER" \
   '{mcpServers: {
-    "func-hello-mcp":  {type: "http", url: $func_url, headersHelper: $helper},
-    "logic-hello-mcp": {type: "http", url: $la_url,   headersHelper: $helper}
+    "logic-hello-mcp": {type: "http", url: $la_url, headersHelper: $helper}
   }}' \
   > .mcp.json
 ```
@@ -353,7 +340,7 @@ jq -n --arg func_url "$FUNC_URL" --arg la_url "$LA_URL" --arg helper "$HELPER" \
 Prompt the following in Claude Code and confirm that the MCP tool executes successfully.
 
 ```
-Use func-hello-mcp to say hello to project1
+Use logic-hello-mcp to say hello to project1
 ```
 
 **3. Execute MCP Tool (Rejection Case)**
@@ -361,19 +348,8 @@ Use func-hello-mcp to say hello to project1
 Prompt the following and confirm that execution is rejected due to lack of permissions.
 
 ```
-Use func-hello-mcp to say hello to project2
+Use logic-hello-mcp to say hello to project2
 ```
-
-#### Other MCP Clients (Codex CLI, Gemini CLI, etc.)
-
-Codex CLI and Gemini CLI can connect to the same APIM-protected MCP servers, but their HTTP-type MCP server configuration only supports a static bearer token read once from an environment variable at startup — unlike Claude Code's `headersHelper`, they have no built-in way to re-run a command such as `az account get-access-token` per request or on reconnect. Since Azure AD access tokens expire after 1 hour, a long-running session with these clients will eventually fail with `401 Unauthorized` until the client is restarted.
-
-[`samplecodes/mcp-auth-proxy/proxy.js`](./samplecodes/mcp-auth-proxy/proxy.js) provides a small local HTTP reverse proxy that bridges this gap:
-
-- Acquires an Azure AD access token via `az account get-access-token`, caching it until shortly before expiry
-- Injects a fresh `Authorization: Bearer <token>` header into every request it forwards to APIM
-
-Point the MCP client's server URL at the proxy (e.g. `http://127.0.0.1:8787/<mcp-backend-path>`) instead of the APIM endpoint directly. The token then stays valid for as long as the proxy process runs, so no client restart is needed when the 1-hour token expires. See the header comment in `proxy.js` for setup steps and configuration examples for Claude Code, Codex CLI, and Gemini CLI.
 
 ### VS Code (GitHub Copilot Chat / CLI) → APIM → MCP
 
@@ -384,7 +360,7 @@ sequenceDiagram
     participant VS as VS Code (GitHub Copilot Chat / CLI)
     participant APIM as API Management
     participant ID as Entra ID
-    participant MCP as MCP Backend (Logic Apps / Azure Functions)
+    participant MCP as MCP Backend (Logic Apps)
 
     VS->>APIM: 1) Request access to /mcp
     APIM-->>VS: 2) 401 Unauthorized
@@ -424,7 +400,7 @@ When prompted for Entra ID authentication, authenticate through the browser and 
 **GitHub Copilot Chat (agent mode):** Prompt the following and confirm that the MCP tool executes successfully.
 
 ```
-Use func-hello-mcp to say hello to project1
+Use logic-hello-mcp to say hello to project1
 ```
 
 **GitHub Copilot CLI:** Launch the Copilot CLI interactive session.
@@ -436,7 +412,7 @@ copilot
 In the interactive session, send the following message and confirm that the MCP tool executes successfully.
 
 ```
-Use func-hello-mcp to say hello to project1
+Use logic-hello-mcp to say hello to project1
 ```
 
 **3. Execute MCP Tool (Rejection Case)**
@@ -444,13 +420,13 @@ Use func-hello-mcp to say hello to project1
 **GitHub Copilot Chat (agent mode):** Prompt the following and confirm that execution is rejected due to lack of permissions.
 
 ```
-Use func-hello-mcp to say hello to project2
+Use logic-hello-mcp to say hello to project2
 ```
 
 **GitHub Copilot CLI:** In the interactive session, send the following message and confirm that execution is rejected due to lack of permissions.
 
 ```
-Use func-hello-mcp to say hello to project2
+Use logic-hello-mcp to say hello to project2
 ```
 
 ## Technical Details and Use Cases
@@ -461,30 +437,13 @@ Use func-hello-mcp to say hello to project2
 
 This repository provides a hands-on experience with end-to-end security implementation combining API Management × MCP × OAuth.
 
-### Approach to AI Security
+### A Note on Where This Sits
 
-In AI security, I believe that "strict authentication and authorization at the entry point based on zero-trust principles" is the most critical factor in preventing risks proactively.
+If you continue on to [apim-mcp-a2a-oauth](https://github.com/apc-n-orita/apim-mcp-a2a-oauth) and then [APICenter](https://github.com/apc-n-orita/APICenter), you'll be walking a three-repository arc that also traces a shape from the tarot's Major Arcana.
 
-However, security and convenience are always in a trade-off relationship. While this world is often discussed in binary terms, achieving the right balance is essential in practical operations.
+This repository already holds both the **Hierophant** and the **Hermit** — not one after the other, but side by side. OAuth2, token validation, and role-based authorization rest on official documentation and established patterns: that's the Hierophant, learning what's already agreed upon. But forcing every caller through APIM as a token broker — a managed-identity token swap paired with Easy Auth on the backend, so direct access is closed off — and using PIM for Groups to grant an ops team JIT access, are original combinations of existing building blocks, not copied whole from a single guide. And the finding that APIM and the backend can silently disagree on which of two duplicate JSON keys wins — a possible authorization bypass — was only found by testing the actual deployed backend, not by reading about it anywhere. That's the Hermit, already at work right here.
 
-![2](./assets/2.png)
-
-In this hands-on lab, we incorporated the following design considerations to balance convenience and security:
-
-- **Scope of Authorization**: Rather than blocking everything, we focused role-based authorization specifically on MCP tool invocations
-- **Integrated Authentication Flow**: Designed to leverage Microsoft account tokens from VS Code directly for MCP authorization without compromising developer experience
-
-"Where to defend at the entry point, and where to allow for user experience" — this decision is the core of practical security design.
-
-To make such design decisions, it's essential to not only acquire external knowledge (extroversion) from official documentation and other sources, but also engage deeply with yourself (introversion) to explore your own solutions. Simply seeking answers externally won't lead to optimal architecture.
-
-![3](./assets/3.png)
-
-### Final Thoughts
-
-Security should be **"a safety mechanism to prevent misuse," not "a restriction on users and developers."** The security features implemented in this hands-on lab are intended to function as such positive safety mechanisms.
-
-I hope this repository serves as a helpful resource for your security design in systems utilizing AI agents and MCP.
+The next repository carries the same mixture forward, just with the balance shifted further inward. And the one after that gathers all three back together, without mixing them, into a single undivided circle — the **World**. This repository's part in that is simply to be a solid first outline, so the later stages have something to stand on.
 
 ## References
 

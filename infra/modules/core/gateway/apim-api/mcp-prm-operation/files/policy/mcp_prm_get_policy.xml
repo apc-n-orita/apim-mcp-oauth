@@ -1,6 +1,8 @@
 <policies>
     <inbound>
-        <!-- Return the OAuth metadata in JSON format -->
+        <base />
+        <!-- Return the OAuth 2.0 Protected Resource Metadata (RFC 9728) in JSON format,
+             scoped to this MCP server's own path/scope -->
         <return-response>
             <set-status code="200" reason="OK" />
             <set-header name="Content-Type" exists-action="override">
@@ -9,16 +11,18 @@
             <set-header name="access-control-allow-origin" exists-action="override">
                 <value>*</value>
             </set-header>
+            <set-header name="Cache-Control" exists-action="override">
+                <value>public, max-age=3600</value>
+            </set-header>
             <set-body>@{
                 return new JObject(
-                    new JProperty("resource", "{{${APIMGatewayURL}}}/"),
+                    new JProperty("resource", "${apim_gateway_url}/${mcp_endpoint_path}${mcp_endpoint_query}"),
                     new JProperty("authorization_servers", new JArray("https://login.microsoftonline.com/{{EntraIDTenantId}}/v2.0")),
                     new JProperty("bearer_methods_supported", new JArray("header")),
-                    new JProperty("scopes_supported", new JArray("api://{{oauth-app-id}}/user_impersonation"))
+                    new JProperty("scopes_supported", new JArray("${scope}"))
                 ).ToString();
             }</set-body>
         </return-response>
-        <base />
     </inbound>
     <backend>
         <base />

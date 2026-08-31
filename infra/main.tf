@@ -9,40 +9,6 @@ locals {
     publisher_name  = "testuser"
   }
 
-  func = {
-    tags = merge(local.tags, { azd-service-name = "funcmcp" })
-    app_settings = [
-      {
-        name  = "AZURE_CLIENT_ID"
-        value = azurerm_user_assigned_identity.mcp.client_id
-      },
-      {
-        name  = "OTEL_SERVICE_NAME"
-        value = "funcmcp"
-      },
-      {
-        name  = "WEBSITE_AUTH_AAD_ALLOWED_TENANTS"
-        value = data.azuread_client_config.current.tenant_id
-      },
-      {
-        name  = "WEBSITE_AUTH_PRM_DEFAULT_WITH_SCOPES"
-        value = "api://${azuread_application.oauth_app.client_id}/user_impersonation"
-      },
-      {
-        name  = "PYTHON_APPLICATIONINSIGHTS_ENABLE_TELEMETRY"
-        value = "true"
-      },
-      {
-        name  = "OTEL_TRACES_SAMPLER"
-        value = "parentbased_traceidratio"
-      },
-      {
-        name  = "OTEL_TRACES_SAMPLER_ARG"
-        value = "1"
-      }
-    ]
-  }
-
   logicapp = {
     tags = merge(local.tags, { azd-service-name = "lamcp" })
     runtime = {
@@ -86,13 +52,6 @@ resource "azurecaf_name" "apim_name" {
 resource "azurecaf_name" "ai_appinsights_name" {
   name          = var.environment_name
   resource_type = "azurerm_application_insights"
-  random_length = 0
-  clean_input   = true
-}
-
-resource "azurecaf_name" "funcmcp_storage_name" {
-  name          = "func-mcp-${var.environment_name}"
-  resource_type = "azurerm_storage_account"
   random_length = 0
   clean_input   = true
 }
@@ -202,6 +161,7 @@ resource "azuread_application" "oauth_app" {
     ignore_changes = [
       identifier_uris,
       api,
+      web,
     ]
   }
 }
@@ -317,59 +277,12 @@ resource "azurerm_user_assigned_identity" "mcp" {
   resource_group_name = azurerm_resource_group.rg.name
 }
 
-
-module "fC-appserviceplan" {
-  source   = "./modules/core/host/appserviceplan"
-  name     = "plan-func-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
-  location = var.location
-  rg_name  = azurerm_resource_group.rg.name
-  tags     = local.tags
-  sku_name = "FC1"
-  os_type  = "Linux"
-}
-
-module "func_mcp" {
-  source                                 = "./modules/app/function/app"
-  name                                   = "func-mcp-${var.environment_name}-${substr(local.resource_token, 0, 3)}"
-  location                               = var.location
-  rg_id                                  = azurerm_resource_group.rg.id
-  tags                                   = local.func.tags
-  app_service_plan_id                    = module.fC-appserviceplan.APPSERVICE_PLAN_ID
-  app_settings                           = local.func.app_settings
-  runtime_name                           = "python"
-  runtime_version                        = "3.11"
-  storage_account_name                   = module.func_mcp_storage.name
-  function_storage_id                    = module.func_mcp_storage.storage_account_id
-  primary_blob_endpoint                  = module.func_mcp_storage.primary_blob_endpoint
-  application_insights_connection_string = azurerm_application_insights.ai.connection_string
-  identity_client_id                     = azurerm_user_assigned_identity.mcp.client_id
-  identity_id                            = azurerm_user_assigned_identity.mcp.id
-
-  tenant_id                               = data.azuread_client_config.current.tenant_id
-  azuread_application_entra_app_client_id = azuread_application.oauth_app.client_id
-
-  depends_on = [module.func_mcp_storage]
-}
-
-module "func_mcp_role" {
-  source                              = "./modules/app/function/role"
-  storage_account_scope_id            = module.func_mcp_storage.storage_account_id
-  monitor_scope_id                    = azurerm_application_insights.ai.id
-  user_assigned_identity_principal_id = azurerm_user_assigned_identity.mcp.principal_id
-}
-
-module "func_mcp_storage" {
-  source                          = "./modules/core/storage"
-  name                            = lower("${substr(replace(azurecaf_name.funcmcp_storage_name.result, "-", ""), 0, 20)}${substr(local.resource_token, 0, 3)}")
-  location                        = var.location
-  resource_group_name             = azurerm_resource_group.rg.name
-  tags                            = local.tags
-  shared_access_key_enabled       = false
-  tier                            = "Standard"
-  replication_type                = "LRS"
-  is_hns_enabled                  = false
-  allow_nested_items_to_be_public = false
-  log_analytics_workspace_id      = azurerm_log_analytics_workspace.law.id
+# la_mcp (Logic App) が APPLICATIONINSIGHTS_AUTHENTICATION_STRING (AAD認証) で
+# Application Insights にテレメトリを送信するために必要
+resource "azurerm_role_assignment" "mcp_monitoring_metrics_publisher" {
+  scope                = azurerm_application_insights.ai.id
+  role_definition_name = "Monitoring Metrics Publisher"
+  principal_id         = azurerm_user_assigned_identity.mcp.principal_id
 }
 
 
@@ -424,20 +337,6 @@ module "la_mcp" {
 
 
 
-module "func_mcp_api" {
-  source                   = "./modules/core/gateway/apim-api/mcp-api"
-  api_name                 = module.func_mcp.name
-  api_description          = "Hello MCP server hosted on Azure Functions"
-  resource_group_name      = azurerm_resource_group.rg.name
-  apim_service_name        = module.apim.APIM_SERVICE_NAME
-  mcp_url                  = module.func_mcp.uri
-  api_management_id        = module.apim.APIM_ID
-  mcp_api_uri_template     = "/runtime/webhooks/mcp"
-  api_management_logger_id = module.apim.API_MANAGEMENT_LOGGER_ID
-  sampling_percentage      = 100.0
-  depends_on               = [module.func_mcp]
-}
-
 module "la_mcp_api" {
   source                   = "./modules/core/gateway/apim-api/mcp-api"
   api_name                 = module.la_mcp.logicapp_name
@@ -457,19 +356,32 @@ module "mcp_product" {
   product_name        = "MCP"
   resource_group_name = azurerm_resource_group.rg.name
   api_management_name = module.apim.APIM_SERVICE_NAME
-  api_ids             = [module.func_mcp_api.api_id, module.la_mcp_api.api_id]
+  api_ids             = [module.la_mcp_api.api_id]
   oauth_app_id        = azuread_application.oauth_app.client_id
   tenant_id           = data.azuread_client_config.current.tenant_id
 
 }
 
+# MCPサーバー共通の OAuth 2.0 Protected Resource Metadata (RFC 9728) 動的ディスカバリーAPI。
+# このAPI自体は path=/.well-known/oauth-protected-resource に固定し、
+# MCPサーバーごとのオペレーション (下記 mcp_prm_* モジュール) をその配下に追加する。
 module "oauth_app" {
   source                   = "./modules/core/gateway/apim-api/oauth-api"
   resource_group_name      = azurerm_resource_group.rg.name
   apim_service_name        = module.apim.APIM_SERVICE_NAME
-  tenant_id                = data.azuread_client_config.current.tenant_id
-  apim_gateway_url         = module.apim.gateway_url
   api_management_logger_id = module.apim.API_MANAGEMENT_LOGGER_ID
   sampling_percentage      = 100.0
   depends_on               = [module.mcp_product]
+}
+
+# lamcp (apim-mcp-oauth 共有 Entra ID アプリのuser_impersonationスコープ) 向けのPRMオペレーション
+module "mcp_prm_lamcp" {
+  source              = "./modules/core/gateway/apim-api/mcp-prm-operation"
+  resource_group_name = azurerm_resource_group.rg.name
+  apim_service_name   = module.apim.APIM_SERVICE_NAME
+  prm_api_name        = module.oauth_app.api_name
+  mcp_server_id       = "lamcp"
+  mcp_endpoint_path   = "${module.la_mcp_api.api_name}${module.la_mcp_api.api_uri_template}"
+  apim_gateway_url    = module.apim.gateway_url
+  scope               = "api://${azuread_application.oauth_app.client_id}/user_impersonation"
 }

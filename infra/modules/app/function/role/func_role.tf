@@ -18,12 +18,6 @@ resource "azurerm_role_assignment" "blob_data_owner" {
   principal_id         = var.user_assigned_identity_principal_id
 }
 
-resource "azurerm_role_assignment" "monitoring_metrics_publisher" {
-  scope                = var.monitor_scope_id
-  role_definition_name = "Monitoring Metrics Publisher"
-  principal_id         = var.user_assigned_identity_principal_id
-}
-
 resource "azurerm_role_assignment" "table_data_contributor" {
   scope                = var.storage_account_scope_id
   role_definition_name = "Storage Table Data Contributor"
