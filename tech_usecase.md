@@ -8,18 +8,18 @@
 
 Backend MCP (Logic Apps) enforces authorization at two independent layers, so that even if one layer is misconfigured, the other still blocks unauthorized access.
 
-| Layer       | Mechanism                             | Enforced by                |
-| ----------- | ------------------------------------- | -------------------------- |
-| Transport   | Easy Auth (Entra ID token validation) | Azure App Service platform |
-| Application | `Mcp.Invoke` App Role check           | Logic App workflow         |
+| Layer | Mechanism | Enforced by |
+|---|---|---|
+| Transport | Easy Auth (Entra ID token validation) | Azure App Service platform |
+| Application | `Mcp.Invoke` App Role check | Logic App workflow |
 
 #### Who Can Access the Backend Directly
 
 Only the following two identities hold the `Mcp.Invoke` App Role and can reach the backend:
 
-| Identity                   | How `Mcp.Invoke` is granted                   | Typical use                          |
-| -------------------------- | --------------------------------------------- | ------------------------------------ |
-| APIM Managed Identity      | Direct App Role assignment to the MSI         | All production traffic via APIM      |
+| Identity | How `Mcp.Invoke` is granted | Typical use |
+|---|---|---|
+| APIM Managed Identity | Direct App Role assignment to the MSI | All production traffic via APIM |
 | Ops Entra ID group members | App Role assignment to the ops security group | Troubleshooting, integration testing |
 
 Normal end-users go through APIM. APIM validates the user token (including per-tool role claims), then replaces it with the APIM MSI token before forwarding to the backend. The backend never sees the user's original token.
@@ -81,14 +81,14 @@ Tokens are kept out of telemetry (Application Insights) and run history by desig
 
 **Production recommendation**: Use **PIM for Groups** to grant **eligible membership** instead of active membership. Eligible members must explicitly activate their group membership (JIT access) for a limited time window before they can access the backend directly.
 
-|                             | Current hands-on     | Production recommendation               |
-| --------------------------- | -------------------- | --------------------------------------- |
-| Membership type             | Active (permanent)   | Eligible (JIT)                          |
-| Activation required         | No                   | Yes (via Entra portal / My Access)      |
-| Maximum activation duration | N/A                  | Configurable (e.g., 8 hours)            |
-| Approval workflow           | N/A                  | Optional (can require approver)         |
-| MFA on activation           | N/A                  | Enforceable                             |
-| Audit trail                 | Group membership log | PIM activation log (with justification) |
+| | Current hands-on | Production recommendation |
+|---|---|---|
+| Membership type | Active (permanent) | Eligible (JIT) |
+| Activation required | No | Yes (via Entra portal / My Access) |
+| Maximum activation duration | N/A | Configurable (e.g., 8 hours) |
+| Approval workflow | N/A | Optional (can require approver) |
+| MFA on activation | N/A | Enforceable |
+| Audit trail | Group membership log | PIM activation log (with justification) |
 
 **How PIM for Groups works** ([MS Docs: PIM for Groups](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/concept-pim-for-groups)):
 
@@ -179,20 +179,14 @@ If no rule matches, APIM returns `403 Forbidden`.
 
 #### Duplicate JSON Keys: A Potential Authorization Bypass
 
-**Background.** Neither JSON (RFC 8259), JSON-RPC 2.0, nor the MCP specification defines how a parser must resolve duplicate keys in an object (e.g., two `method` properties, or `params` appearing twice). RFC 8259 only says names _should_ be unique — behavior on violation is implementation-defined. This means each component in the request path (the gateway and the backend) is free to pick its own resolution order (first-wins, last-wins, or error), independently of the others.
+**Background.** Neither JSON (RFC 8259), JSON-RPC 2.0, nor the MCP specification defines how a parser must resolve duplicate keys in an object (e.g., two `method` properties, or `params` appearing twice). RFC 8259 only says names *should* be unique — behavior on violation is implementation-defined. This means each component in the request path (the gateway and the backend) is free to pick its own resolution order (first-wins, last-wins, or error), independently of the others.
 
-**Why this matters here.** The authorization logic above reads `method` and `params.name` from the request body to decide whether to allow a `tools/call`. `authentication-managed-identity` then forwards the _original, unmodified_ request body to the backend. If the body contains a duplicate key and the backend's JSON parser resolves it differently than APIM did, the method or tool name APIM authorized against can differ from the one the backend actually executes — the same class of inconsistency that HTTP request smuggling exploits between a front-end proxy and a back-end server, applied to JSON parsing instead of HTTP framing.
+**Why this matters here.** The authorization logic above reads `method` and `params.name` from the request body to decide whether to allow a `tools/call`. `authentication-managed-identity` then forwards the *original, unmodified* request body to the backend. If the body contains a duplicate key and the backend's JSON parser resolves it differently than APIM did, the method or tool name APIM authorized against can differ from the one the backend actually executes — the same class of inconsistency that HTTP request smuggling exploits between a front-end proxy and a back-end server, applied to JSON parsing instead of HTTP framing.
 
 Example shape of the attack (illustrative, not verbatim):
 
 ```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "tools/list",
-  "method": "tools/call",
-  "params": { "name": "restricted_tool" }
-}
+{"jsonrpc":"2.0","id":1,"method":"tools/list","method":"tools/call","params":{"name":"restricted_tool"}}
 ```
 
 If APIM resolves `method` to `tools/list` (skipping the tool-authorization branch entirely) while the backend resolves it to `tools/call`, an unauthorized tool invocation could slip through without ever hitting the `403` branch.
@@ -201,7 +195,7 @@ If APIM resolves `method` to `tools/list` (skipping the tool-authorization branc
 
 Because this agreement is incidental — an artifact of the specific parser versions involved, not something the spec requires — it isn't safe to rely on indefinitely. A future dependency update or a language/runtime change on the backend could silently reintroduce the bypass.
 
-**Mitigation: normalize before forwarding.** Rather than depend on the backend agreeing with APIM's interpretation, the policy re-serializes the already-parsed, already-authorized `JObject` and forwards _that_ instead of the raw request bytes. This makes the forwarded body single-valued at the point it left APIM, so there is nothing left for the backend to resolve differently:
+**Mitigation: normalize before forwarding.** Rather than depend on the backend agreeing with APIM's interpretation, the policy re-serializes the already-parsed, already-authorized `JObject` and forwards *that* instead of the raw request bytes. This makes the forwarded body single-valued at the point it left APIM, so there is nothing left for the backend to resolve differently:
 
 ```xml
 <!-- After the tools/call authorization choose block, before authentication-managed-identity -->
