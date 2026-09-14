@@ -236,9 +236,13 @@ Enables centralized authentication and authorization management for enterprise-s
 
 > **Note on Official MCPs (e.g., GitHub MCP, Azure MCP, Slack MCP)**
 >
-> For official MCPs, restricting access at the MCP tool level has limited effectiveness. In practice, AI agents — and the developers who operate them — frequently bypass MCP entirely by invoking the platform CLI directly (e.g., `gh` commands, raw REST/GraphQL API calls). Since the same underlying operation can be performed either through an MCP tool or a direct CLI call, controlling only the MCP path leaves a wide-open alternative route.
+> #### Authorizing the MCP path itself: ID-JAG / Enterprise-Managed Authorization (EMA)
 >
-> More robust and comprehensive approaches are:
+> Official MCPs run their own authorization server in a different trust domain from the enterprise IdP. Identity Assertion JWT Authorization Grant (ID-JAG) and its MCP extension, Enterprise-Managed Authorization, are designed exactly for that cross-domain case, and are the effective way to authorize official MCPs: the enterprise IdP becomes the policy decision point for every official MCP server the organization trusts, and revocation is centralized at the IdP instead of scattered across each service. For more on ID-JAG, see [this blog post](https://techblog.ap-com.co.jp/entry/2026/09/14/235649).
+>
+> That said, with official MCPs, AI agents often bypass MCP entirely via the platform's CLI (e.g., `gh` commands, direct REST/GraphQL calls). Since the same operation can run either through MCP or a direct call, revoking or restricting the MCP grant leaves that bypass untouched.
+>
+> Closing that gap requires controls that apply no matter which path the agent takes:
 >
 > #### 1. Platform-Side RBAC
 >
