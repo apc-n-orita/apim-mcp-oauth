@@ -141,64 +141,6 @@ azd up
 azd down
 ```
 
-## Troubleshooting
-
-### Application Insights Billing Feature 409 Conflict on `azd up`
-
-**Symptoms**
-
-Running `azd up` fails with one or both of the following errors.
-
-**Error 1: Billing Feature update failure**
-
-```
-Error: update Billing Feature for Component ...: unexpected status 409 (409 Conflict)
-  with error: PreconditionFailed (412)
-  with azurerm_application_insights.ai, on main.tf line 231
-```
-
-**Error 2: Resource already exists**
-
-```
-Error: a resource with the ID ".../providers/Microsoft.Insights/components/appi-..." already exists
-  with azurerm_application_insights.ai, on main.tf line 231
-```
-
-**Cause**
-
-The AzureRM provider always calls the Billing Feature PATCH API when applying `azurerm_application_insights`. If the ETag on the Azure side has drifted from the Terraform state, the call fails with 412 PreconditionFailed — a known provider behavior.
-
-Re-running `azd up` after Error 1 will trigger Error 2 as a follow-on failure.
-
-**Resolution** (if you encountered Error 1, then re-ran `azd up` and hit Error 2)
-
-1. Initialize modules and providers
-
-```bash
-terraform -chdir=infra init -upgrade
-```
-
-2. Import the existing Azure resource into Terraform state
-
-```bash
-ENV_NAME="$(azd env list --output json | jq -r '.[0].Name')"
-SUBSCRIPTION_ID="$(azd env get-value AZURE_SUBSCRIPTION_ID --environment "$ENV_NAME")"
-RG="$(az group list --subscription "$SUBSCRIPTION_ID" --tag "azd-env-name=${ENV_NAME}" --query '[0].name' -o tsv)"
-APPINSIGHTS_ID="$(az resource list --subscription "$SUBSCRIPTION_ID" -g "$RG" --resource-type "Microsoft.Insights/components" --query '[0].id' -o tsv)"
-
-terraform -chdir=infra import \
-  -state=".azure/${ENV_NAME}/infra/terraform.tfstate" \
-  -var-file=".azure/${ENV_NAME}/infra/main.tfvars.json" \
-  azurerm_application_insights.ai \
-  "$APPINSIGHTS_ID"
-```
-
-3. Re-run the deployment
-
-```bash
-azd up
-```
-
 ## Hands-On
 
 ### AI Agent / Claude Code → APIM → MCP
@@ -303,8 +245,7 @@ The `headersHelper` field in `.mcp.json` calls `az account get-access-token` at 
 > Claude Code natively supports OAuth authorization via Dynamic Client Registration (DCR). However, Entra ID does not support DCR. Static client registration is an alternative, but it requires distributing a client secret to each user, which poses a security risk. As a practical workaround, Claude Code can be configured to acquire a token via the Azure CLI (`az login`) using `headersHelper` instead.
 >
 > **Access token expiry and reconnection**  
-> Azure AD access tokens are valid for 1 hour. `headersHelper` runs only when Claude Code starts or when the MCP connection is re-established — it does not refresh tokens automatically mid-session. If the token expires during a session, restart Claude Code or reconnect the MCP server to obtain a fresh token.
->
+> Azure AD access tokens are valid for 1 hour. `headersHelper` runs at session start and on every reconnect, and Claude Code does not cache its output. If a tool call returns `401 Unauthorized` or `403 Forbidden` (e.g., because the token expired), Claude Code automatically re-runs the helper, reconnects with the fresh headers, and retries the call once.>
 > **Why pre-authorizing Azure CLI is safe**  
 > The `headersHelper` command acquires a token scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`) using the Azure CLI client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). This is the same pattern Microsoft uses for its own first-party services (e.g., `https://ai.azure.com`) — they are pre-authorized against Entra ID and obtain tokens via Azure CLI in the same way. Additionally, the OAuth app registered here is single-tenant, so only users who can sign in to this specific tenant can obtain a token. The Terraform resource that enables this is:
 >
@@ -403,11 +344,13 @@ When prompted for Entra ID authentication, authenticate through the browser and 
 Use logic-hello-mcp to say hello to project1
 ```
 
-**GitHub Copilot CLI:** Launch the Copilot CLI interactive session.
+**GitHub Copilot CLI:** Launch the Copilot CLI interactive session, specifying `.mcp.json` with `--additional-mcp-config`.
 
 ```bash
-copilot
+copilot --additional-mcp-config @.mcp.json
 ```
+
+> **Note:** If the browser does not open for MCP authorization when running Copilot CLI on WSL, refer to [this article](https://techblog.ap-com.co.jp/entry/2026/10/05/160825).
 
 In the interactive session, send the following message and confirm that the MCP tool executes successfully.
 
