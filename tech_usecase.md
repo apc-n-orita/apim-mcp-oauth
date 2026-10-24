@@ -236,19 +236,25 @@ Register an MCP app in Entra ID (formerly Azure AD) and create app roles with th
 
 Enables centralized authentication and authorization management for enterprise-specific custom MCPs.
 
-> **Note on Official MCPs (e.g., GitHub MCP, Azure MCP, Slack MCP)**
+> **Note on Official MCPs (e.g., Atlassian MCP, Figma MCP, Linear MCP)**
 >
 > #### Authorizing the MCP path itself: ID-JAG / Enterprise-Managed Authorization (EMA)
 >
-> Official MCPs run their own authorization server in a different trust domain from the enterprise IdP. Identity Assertion JWT Authorization Grant (ID-JAG) and its MCP extension, Enterprise-Managed Authorization, are designed for that cross-domain case: the enterprise IdP decides whether to issue a grant for each official MCP server the organization trusts, so approval and revocation of access are centralized at the IdP instead of scattered across each service. The MCP server's own authorization server still applies its local policy before issuing an access token. This is an effective option for official MCPs that support it, but support varies by service. Note that ID-JAG is still an IETF draft (the MCP extension itself is marked Stable). For more on ID-JAG, see [this blog post](https://techblog.ap-com.co.jp/entry/2026/09/14/235649).
+> Official MCPs run their own authorization server in a different trust domain from the enterprise IdP. Identity Assertion JWT Authorization Grant (ID-JAG) and its MCP extension, Enterprise-Managed Authorization, are designed for that cross-domain case:
 >
-> That said, with official MCPs, AI agents often bypass MCP entirely via the platform's CLI (e.g., `gh` commands, direct REST/GraphQL calls). Since the same operation can run either through MCP or a direct call, revoking or restricting the MCP grant leaves that bypass untouched.
+> - **Policy**: the enterprise IdP decides whether to issue a grant for each official MCP server the organization trusts, so approval and revocation are centralized at the IdP. The MCP server's own authorization server still applies its local policy before issuing an access token.
+> - **Support**: varies by service. As of October 2026, Microsoft Entra ID has not announced native ID-JAG issuance, so organizations that use Entra ID as their IdP cannot rely on this path out of the box.
+> - **Maturity**: ID-JAG is still an IETF draft; the MCP extension is marked Stable.
+>
+> For more on ID-JAG, see [this blog post](https://techblog.ap-com.co.jp/entry/2026/09/14/235649).
+>
+> That said, with official MCPs, AI agents often bypass MCP entirely via the platform's CLI or API (e.g., direct REST/GraphQL calls). Since the same operation can run either through MCP or a direct call, revoking or restricting the MCP grant leaves that bypass untouched.
 >
 > Closing that gap requires controls that apply no matter which path the agent takes:
 >
 > #### 1. Platform-Side RBAC
 >
-> Restrict what the agent's credential can do at the platform level, regardless of how it was invoked (MCP, CLI, or direct API). Each platform — GitHub, Azure, Slack, and others — provides its own RBAC or other permission controls. Applying least-privilege settings there ensures the restriction holds no matter which execution path the agent takes.
+> Restrict what the agent's credential can do at the platform level, regardless of how it was invoked (MCP, CLI, or direct API). Each platform — Atlassian, Figma, Linear, and others — provides its own RBAC or other permission controls. Applying least-privilege settings there ensures the restriction holds no matter which execution path the agent takes.
 >
 > #### 2. Harness Engineering (Agent Skills)
 >
