@@ -242,8 +242,8 @@ Enables centralized authentication and authorization management for enterprise-s
 >
 > Official MCPs run their own authorization server in a different trust domain from the enterprise IdP. Identity Assertion JWT Authorization Grant (ID-JAG) and its MCP extension, Enterprise-Managed Authorization, are designed for that cross-domain case:
 >
-> - **Policy**: the enterprise IdP decides whether to issue a grant for each official MCP server the organization trusts, so approval and revocation are centralized at the IdP. The MCP server's own authorization server still applies its local policy before issuing an access token.
-> - **Support**: varies by service. As of October 2026, Microsoft Entra ID has not announced native ID-JAG issuance, so organizations that use Entra ID as their IdP cannot rely on this path out of the box.
+> - **Policy**: the enterprise IdP becomes the policy decision point for every official MCP server the organization trusts, and revocation is centralized at the IdP instead of scattered across each service.
+> - **Support**: varies by service. As of October 2026, Microsoft Entra ID does not yet support ID-JAG.
 > - **Maturity**: ID-JAG is still an IETF draft; the MCP extension is marked Stable.
 >
 > For more on ID-JAG, see [this blog post](https://techblog.ap-com.co.jp/entry/2026/09/14/235649).
