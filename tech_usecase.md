@@ -66,7 +66,7 @@ The backend only ever sees the MSI token — never the end-user's token.
 
 #### Preventing Token Leakage in Logs
 
-Tokens are kept out of telemetry (Application Insights) and run history by design, on both backends.
+Tokens are kept out of telemetry (Application Insights) and run history by design.
 
 **Logic App**
 
@@ -105,7 +105,9 @@ Tokens are kept out of telemetry (Application Insights) and run history by desig
 
 #### Overview of OAuth Metadata Policy
 
-When VS Code (GitHub Copilot extension) accesses the MCP endpoint (`/mcp`), APIM returns a 401 response because authentication is required. At this point, the client automatically sends a GET request to APIM's `/.well-known/oauth-protected-resource` endpoint to retrieve OAuth metadata.
+When VS Code (GitHub Copilot Chat / CLI) accesses the MCP endpoint (`/mcp`), APIM returns a 401 response because authentication is required. At this point, the client automatically sends a GET request to APIM's `/.well-known/oauth-protected-resource` endpoint to retrieve OAuth metadata.
+
+> This discovery flow applies to interactive OAuth clients such as GitHub Copilot Chat / CLI. Claude Code and AI Agents acquire an access token in advance, so they skip this step and call `/mcp` with the token directly.
 
 The shared `.well-known/oauth-protected-resource` API is just an empty path shell (see the `oauth-api` Terraform module). Each MCP backend attaches its own GET/OPTIONS operation underneath it via the `mcp-prm-operation` module, so the JSON returned — resource URL, authorization server endpoint, supported authentication methods, and scope — reflects that specific backend rather than a single fixed value shared by every MCP server.
 
@@ -156,7 +158,7 @@ VS Code uses this metadata to access the authorization server (e.g., `https://lo
 
 #### Overview of OAuth Token Validation Policy
 
-When VS Code obtains an access token and accesses the `/mcp` endpoint, APIM validates the access token.
+When a client accesses the `/mcp` endpoint with an access token, APIM validates the access token.
 
 The token validation policy uses `validate-azure-ad-token` to perform the following validations:
 
@@ -206,7 +208,7 @@ This closes the gap regardless of what parser or resolution order the backend us
 
 #### Backend Protection with Managed Identity
 
-`authentication-managed-identity` overwrites the Authorization header with APIM's Managed Identity token before forwarding to the backend MCP (Logic Apps/Functions). The backend enforces authorization via Easy Auth + `Mcp.Invoke` App Role check, so only callers with that role (APIM MSI or ops group members) can reach it — see [Backend MCP Authorization Architecture](#backend-mcp-authorization-architecture) for details.
+`authentication-managed-identity` overwrites the Authorization header with APIM's Managed Identity token before forwarding to the backend MCP (Logic Apps). The backend enforces authorization via Easy Auth + `Mcp.Invoke` App Role check, so only callers with that role (APIM MSI or ops group members) can reach it — see [Backend MCP Authorization Architecture](#backend-mcp-authorization-architecture) for details.
 
 ```xml
 <!-- Acquire token using Managed Identity -->

@@ -179,6 +179,8 @@ sequenceDiagram
 
 #### Steps
 
+##### AI Agent (Python)
+
 **1. Set Up Python Environment**
 
 Navigate to the `samplecodes/` directory, create and activate a Python virtual environment, and install the required Python packages.
@@ -234,31 +236,10 @@ export MCP_TOOL_NAME="hello_project2"
 python mcp_tool_call.py
 ```
 
-#### Claude Code
+##### Claude Code
 
 Claude Code connects to APIM-protected MCP servers using the same token-based flow.  
-The `headersHelper` field in `.mcp.json` calls `az account get-access-token` at startup, so no interactive browser login is required.
-
-> **Tips**
->
-> **Why Azure CLI token instead of OAuth client credentials?**  
-> Claude Code natively supports OAuth authorization via Dynamic Client Registration (DCR). However, Entra ID does not support DCR. Static client registration is an alternative, but it requires distributing a client secret to each user, which poses a security risk. As a practical workaround, Claude Code can be configured to acquire a token via the Azure CLI (`az login`) using `headersHelper` instead.
->
-> **Access token expiry and reconnection**  
-> Azure AD access tokens are valid for 1 hour. `headersHelper` runs at session start and on every reconnect, and Claude Code does not cache its output. If a tool call returns `401 Unauthorized` or `403 Forbidden` (e.g., because the token expired), Claude Code automatically re-runs the helper, reconnects with the fresh headers, and retries the call once.>
-> **Why pre-authorizing Azure CLI is safe**  
-> The `headersHelper` command acquires a token scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`) using the Azure CLI client ID (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). This is the same pattern Microsoft uses for its own first-party services (e.g., `https://ai.azure.com`) — they are pre-authorized against Entra ID and obtain tokens via Azure CLI in the same way. Additionally, the OAuth app registered here is single-tenant, so only users who can sign in to this specific tenant can obtain a token. The Terraform resource that enables this is:
->
-> ```hcl
-> resource "azuread_application_pre_authorized" "oauth_app" {
->   application_id       = azuread_application.oauth_app.id
->   authorized_client_id = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" # Azure CLI
->
->   permission_ids = [
->     azuread_application_permission_scope.user_impersonation.scope_id,
->   ]
-> }
-> ```
+The `headersHelper` field in `.mcp.json` calls `az account get-access-token`, so no interactive browser login is required.
 
 **1. Configure `.mcp.json`**
 
@@ -291,6 +272,28 @@ Prompt the following and confirm that execution is rejected due to lack of permi
 ```
 Use logic-hello-mcp to say hello to project2
 ```
+
+> **Tips**
+>
+> **Why Azure CLI token instead of OAuth client credentials?**  
+> Claude Code supports OAuth via Dynamic Client Registration (DCR), but Entra ID does not. Static client registration would require distributing a client secret to each user, so `headersHelper` acquires a token via Azure CLI (`az login`) instead.
+>
+> **Access token expiry and reconnection**  
+> Entra ID access tokens are valid for 1 hour. `headersHelper` runs at startup and on reconnect, and Claude Code also re-runs it and retries once when a tool call returns `401` or `403` (e.g., an expired token).
+>
+> **Why pre-authorizing Azure CLI is safe**  
+> The token is scoped to this hands-on's Entra ID app (`api://<OAUTH_APP_ID>`), which is single-tenant, so only users who can sign in to this tenant can obtain one. The Terraform resource that enables this is:
+>
+> ```hcl
+> resource "azuread_application_pre_authorized" "oauth_app" {
+>   application_id       = azuread_application.oauth_app.id
+>   authorized_client_id = "04b07795-8ddb-461a-bbee-02f9e1bf7b46" # Azure CLI
+>
+>   permission_ids = [
+>     azuread_application_permission_scope.user_impersonation.scope_id,
+>   ]
+> }
+> ```
 
 ### VS Code (GitHub Copilot Chat / CLI) → APIM → MCP
 
@@ -332,25 +335,41 @@ sequenceDiagram
 
 #### Steps
 
+##### GitHub Copilot Chat (agent mode)
+
 **1. Start MCP**
 
-When prompted for Entra ID authentication, authenticate through the browser and verify that the tool list is correctly retrieved.
+Start the MCP server. When prompted for Entra ID authentication, authenticate through the browser and verify that the tool list is correctly retrieved.
 
 **2. Execute MCP Tool (Success Case)**
 
-**GitHub Copilot Chat (agent mode):** Prompt the following and confirm that the MCP tool executes successfully.
+Prompt the following and confirm that the MCP tool executes successfully.
 
 ```
 Use logic-hello-mcp to say hello to project1
 ```
 
-**GitHub Copilot CLI:** Launch the Copilot CLI interactive session, specifying `.mcp.json` with `--additional-mcp-config`.
+**3. Execute MCP Tool (Rejection Case)**
+
+Prompt the following and confirm that execution is rejected due to lack of permissions.
+
+```
+Use logic-hello-mcp to say hello to project2
+```
+
+##### GitHub Copilot CLI
+
+**1. Start Copilot CLI**
+
+Launch the interactive session, specifying the `.mcp.json` generated in "Configure `.mcp.json`" under Claude Code above with `--additional-mcp-config`.
 
 ```bash
 copilot --additional-mcp-config @.mcp.json
 ```
 
 > **Note:** If the browser does not open for MCP authorization when running Copilot CLI on WSL, refer to [this article](https://techblog.ap-com.co.jp/entry/2026/10/05/160825).
+
+**2. Execute MCP Tool (Success Case)**
 
 In the interactive session, send the following message and confirm that the MCP tool executes successfully.
 
@@ -360,13 +379,7 @@ Use logic-hello-mcp to say hello to project1
 
 **3. Execute MCP Tool (Rejection Case)**
 
-**GitHub Copilot Chat (agent mode):** Prompt the following and confirm that execution is rejected due to lack of permissions.
-
-```
-Use logic-hello-mcp to say hello to project2
-```
-
-**GitHub Copilot CLI:** In the interactive session, send the following message and confirm that execution is rejected due to lack of permissions.
+Send the following message and confirm that execution is rejected due to lack of permissions.
 
 ```
 Use logic-hello-mcp to say hello to project2
@@ -391,4 +404,4 @@ The next repository carries the same mixture forward, just with the balance shif
 ## References
 
 - [Fine-Grained Role Control for MCP Tools with APIM](https://dev.to/imdj/fine-grained-role-control-for-mcp-tools-with-apim-2pn7)
-- [ID-JUG (Identity Assertion Authorization Grant)](https://github.com/oauth-wg/oauth-identity-assertion-authz-grant/blob/main/draft-ietf-oauth-identity-assertion-authz-grant.md)
+- [ID-JAG (Identity Assertion Authorization Grant)](https://github.com/oauth-wg/oauth-identity-assertion-authz-grant/blob/main/draft-ietf-oauth-identity-assertion-authz-grant.md)
